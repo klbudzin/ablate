@@ -3,10 +3,12 @@ target_sources(ablateLibrary
         perfectGas.cpp
         stiffenedGas.cpp
         tChem.cpp
+        tChemSoot.cpp
         PUBLIC
         eos.hpp
         perfectGas.hpp
         tChem.hpp
+        tChemSoot.hpp
         stiffenedGas.hpp
         )
 
