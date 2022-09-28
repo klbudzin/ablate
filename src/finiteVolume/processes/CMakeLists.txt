@@ -4,6 +4,8 @@ target_sources(ablateLibrary
         navierStokesTransport.cpp
         speciesTransport.cpp
         evTransport.cpp
+        tChemReactions.cpp
+        tChemSootReactions.cpp
         twoPhaseEulerAdvection.cpp
         gravity.cpp
         pressureGradientScaling.cpp
@@ -20,6 +22,8 @@ target_sources(ablateLibrary
         navierStokesTransport.hpp
         speciesTransport.hpp
         evTransport.hpp
+        tChemReactions.hpp
+        tChemSootReactions.hpp
         twoPhaseEulerAdvection.hpp
         gravity.hpp
         pressureGradientScaling.hpp
@@ -30,3 +34,4 @@ target_sources(ablateLibrary
         chemistry.hpp
         radiationLoss.hpp
         )
+add_subdirectory(tchemSoot)

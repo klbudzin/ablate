@@ -3,6 +3,7 @@ target_sources(ablateLibrary
         perfectGas.cpp
         stiffenedGas.cpp
         tChem.cpp
+        tChemSoot.cpp
         chemTab.cpp
         chemistryModel.cpp
         twoPhase.cpp
@@ -11,6 +12,7 @@ target_sources(ablateLibrary
         eos.hpp
         perfectGas.hpp
         tChem.hpp
+        tChemSoot.hpp
         stiffenedGas.hpp
         chemTab.hpp
         chemistryModel.hpp
