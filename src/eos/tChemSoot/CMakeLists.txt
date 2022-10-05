@@ -5,13 +5,18 @@ target_sources(ablateLibrary
         pressure.cpp
         sensibleEnthalpy.cpp
         speedOfSound.cpp
+        specificHeatConstantPressure.cpp
+        specificHeatConstantVolume.cpp
         PUBLIC
+        densityFcn.hpp
         temperature.hpp
+        temperatureFcn.hpp
         sensibleInternalEnergy.hpp
         sensibleInternalEnergyFcn.hpp
+        totalInternalEnergyFcn.hpp
         pressure.hpp
-        pressureFcn.hpp
         sensibleEnthalpy.hpp
-        sensibleEnthalpyFcn.hpp
         speedOfSound.hpp
+        specificHeatConstantPressure.hpp
+        specificHeatConstantVolume.hpp
         )
