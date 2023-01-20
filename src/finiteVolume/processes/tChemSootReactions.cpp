@@ -5,11 +5,11 @@
 #include "finiteVolume/processes/tchemSoot/IgnitionZeroDSoot.hpp"
 #include "finiteVolume/processes/tchemSoot/IgnitionZeroD_ProblemSoot.hpp"
 #include "finiteVolume/processes/tchemSoot/Soot7StepReactionModel.hpp"
-#include "utilities/petscError.hpp"
+#include "utilities/petscUtilities.hpp"
 #include "utilities/vectorUtilities.hpp"
 
 ablate::finiteVolume::processes::TChemSootReactions::TChemSootReactions(const std::shared_ptr<eos::EOS>& eosIn, const std::shared_ptr<ablate::parameters::Parameters>& options)
-    : eos(std::dynamic_pointer_cast<eos::TChemSoot>(eosIn)), numberSpecies(eosIn->GetSpecies().size()) {
+    : eos(std::dynamic_pointer_cast<eos::TChemSoot>(eosIn)), numberSpecies(eosIn->GetSpeciesVariables().size()) {
     //Understand numberSpecies is species of the gas mechanism + C(s) (i.e Soot), C(s) should be the species in the first index of all vectors
     // make sure that the eos is set
     if (!std::dynamic_pointer_cast<eos::TChemSoot>(eosIn)) {
@@ -180,11 +180,11 @@ PetscErrorCode ablate::finiteVolume::processes::TChemSootReactions::ChemistryFlo
 
             // Get the current state variables for this cell
             const PetscScalar* eulerField = nullptr;
-            DMPlexPointLocalFieldRead(dm, cell, flowEulerId, flowArray, &eulerField) >> checkError;
+            DMPlexPointLocalFieldRead(dm, cell, flowEulerId, flowArray, &eulerField) >> utilities::PetscUtilities::checkError;
             const PetscScalar* flowDensityField = nullptr;
-            DMPlexPointLocalFieldRead(dm, cell, flowDensityId, flowArray, &flowDensityField) >> checkError;
+            DMPlexPointLocalFieldRead(dm, cell, flowDensityId, flowArray, &flowDensityField) >> utilities::PetscUtilities::checkError;
             const PetscScalar* flowEVField = nullptr;
-            DMPlexPointLocalFieldRead(dm, cell, flowEVId, flowArray, &flowEVField) >> checkError;
+            DMPlexPointLocalFieldRead(dm, cell, flowEVId, flowArray, &flowEVField) >> utilities::PetscUtilities::checkError;
 
 
             // cast the state at i to a state vector
@@ -349,7 +349,7 @@ PetscErrorCode ablate::finiteVolume::processes::TChemSootReactions::ChemistryFlo
 
                 // compute the cell centroid
                 PetscReal centroid[3];
-                DMPlexComputeCellGeometryFVM(dm, cell, nullptr, centroid, nullptr) >> checkError;
+                DMPlexComputeCellGeometryFVM(dm, cell, nullptr, centroid, nullptr) >> utilities::PetscUtilities::checkError;
 
                 // Output error information
                 std::stringstream warningMessage;
@@ -403,11 +403,11 @@ PetscErrorCode ablate::finiteVolume::processes::TChemSootReactions::AddChemistry
 
             // Get the current state variables for this cell
             PetscScalar* eulerSource = nullptr;
-            DMPlexPointLocalFieldRef(dm, cell, flowEulerId, fArray, &eulerSource) >> checkError;
+            DMPlexPointLocalFieldRef(dm, cell, flowEulerId, fArray, &eulerSource) >> utilities::PetscUtilities::checkError;
             PetscScalar* densityYiSource = nullptr;
-            DMPlexPointLocalFieldRef(dm, cell, flowDensityYiId, fArray, &densityYiSource) >> checkError;
+            DMPlexPointLocalFieldRef(dm, cell, flowDensityYiId, fArray, &densityYiSource) >> utilities::PetscUtilities::checkError;
             PetscScalar* densityEVSource = nullptr;
-            DMPlexPointLocalFieldRef(dm, cell, flowDensityEvId, fArray, &densityEVSource) >> checkError;
+            DMPlexPointLocalFieldRef(dm, cell, flowDensityEvId, fArray, &densityEVSource) >> utilities::PetscUtilities::checkError;
 
             // cast the state at i to a state vector
             const auto sourceAtI = Kokkos::subview(process->sourceTermsHost, chemIndex, Kokkos::ALL());
@@ -431,7 +431,7 @@ PetscErrorCode ablate::finiteVolume::processes::TChemSootReactions::AddChemistry
 }
 
 void ablate::finiteVolume::processes::TChemSootReactions::AddChemistrySourceToFlow(const FiniteVolumeSolver& solver, Vec locFVec) {
-    AddChemistrySourceToFlow(solver, solver.GetSubDomain().GetDM(), NAN, nullptr, locFVec, this) >> checkError;
+    AddChemistrySourceToFlow(solver, solver.GetSubDomain().GetDM(), NAN, nullptr, locFVec, this) >> utilities::PetscUtilities::checkError;
 }
 
 #include "registrar.hpp"

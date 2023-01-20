@@ -480,7 +480,8 @@ void ablate::eos::TChemSoot::FillWorkingVectorFromDensityMassFractions(double &d
 
 
 
-ablate::eos::FieldFunction ablate::eos::TChemSoot::GetFieldFunctionFunction(const std::string &field, ablate::eos::ThermodynamicProperty property1, ablate::eos::ThermodynamicProperty property2) const {
+ablate::eos::EOSFunction ablate::eos::TChemSoot::GetFieldFunctionFunction(const std::string &field, ablate::eos::ThermodynamicProperty property1, ablate::eos::ThermodynamicProperty property2,
+                                                                            std::vector<std::string> otherProperties) const {
     if (finiteVolume::CompressibleFlowFields::EULER_FIELD == field) {
 
         if ((property1 == ThermodynamicProperty::Temperature && property2 == ThermodynamicProperty::Pressure) ||

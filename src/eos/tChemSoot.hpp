@@ -11,6 +11,7 @@
 #include "eos/tChemSoot/sensibleInternalEnergy.hpp"
 #include "eos/tChemSoot/speedOfSound.hpp"
 #include "eos/tChemSoot/temperature.hpp"
+#include "mathFunctions/fieldFunction.hpp"
 #include "utilities/intErrorChecker.hpp"
 
 namespace ablate::eos {
@@ -75,14 +76,15 @@ class TChemSoot : public EOS {
      * @param property1
      * @param property2
      */
-    [[nodiscard]] FieldFunction GetFieldFunctionFunction(const std::string& field, ThermodynamicProperty property1, ThermodynamicProperty property2) const override;
+    [[nodiscard]] EOSFunction GetFieldFunctionFunction(const std::string& field, ThermodynamicProperty property1, ThermodynamicProperty property2,
+                                                                        std::vector<std::string> otherProperties) const override;
 
     /**
      * Species supported by this EOS
      * species model functions
      * @return
      */
-    [[nodiscard]] const std::vector<std::string>& GetSpecies() const override { return species; }
+    [[nodiscard]] const std::vector<std::string>& GetSpecies() const { return species; }
 
     /**
      * Returns all elements tracked in this mechanism and their molecular mass
