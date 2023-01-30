@@ -115,7 +115,7 @@ void ablate::finiteVolume::processes::TChemSootReactions::Initialize(ablate::fin
     kineticModelDataClone = eos->GetKineticModelData().clone(numberCells);
     kineticModelGasConstDataDevices = TChem::createGasKineticModelConstData<typename Tines::UseThisDevice<exec_space>::type>(kineticModelDataClone);
     //Let the Soot reaction rate calculator know where the specific species will be located
-    ablate::finiteVolume::processes::tchemSoot::Soot7StepReactionModel::UpdateSpeciesSpecificIndices<typename Tines::UseThisDevice<exec_space>::type>(eos->GetSpecies());
+    ablate::finiteVolume::processes::tchemSoot::Soot7StepReactionModel::UpdateSpeciesSpecificIndices<typename Tines::UseThisDevice<exec_space>::type>(eos->GetSpeciesVariables());
 
     //Determine where in the extra variable array the Soot Number Density is
     const std::vector<std::string> flowEVComponents = flow.GetSubDomain().GetField("densityEV").components;
