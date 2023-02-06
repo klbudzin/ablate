@@ -84,6 +84,7 @@ class TChemSoot : public EOS {
      * species model functions
      * @return
      */
+
     [[nodiscard]] const std::vector<std::string>& GetSpeciesVariables() const override { return species; }
 
     /**
@@ -214,7 +215,9 @@ class TChemSoot : public EOS {
      */
     using ThermodynamicStaticFunction = PetscErrorCode (*)(const PetscReal conserved[], PetscReal* property, void* ctx);
     using ThermodynamicTemperatureStaticFunction = PetscErrorCode (*)(const PetscReal conserved[], PetscReal temperature, PetscReal* property, void* ctx);
+
     std::map<ThermodynamicProperty, std::tuple<ThermodynamicStaticFunction, ThermodynamicTemperatureStaticFunction, std::function<ordinal_type(ordinal_type)>>> thermodynamicFunctions = {
+
         {ThermodynamicProperty::Density, {DensityFunction, DensityTemperatureFunction, [](auto) { return 0; }}},
         {ThermodynamicProperty::Pressure,
          {PressureFunction, PressureTemperatureFunction, ablate::eos::tChemSoot::Temperature::getWorkSpaceSize}} /**note size of temperature because it has a larger scratch space */,
@@ -239,6 +242,7 @@ class TChemSoot : public EOS {
      * @param yi
      */
     static void FillWorkingVectorFromDensityMassFractions(double& density, double& temperature, const double* densityYi, const real_type_1d_view_host& stateVector, const int& totNumSpec);
+
 
    public:
     // Private static helper functions

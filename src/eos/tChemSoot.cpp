@@ -51,6 +51,7 @@ ablate::eos::TChemSoot::TChemSoot(std::filesystem::path mechanismFileIn, std::fi
 
     // compute the reference enthalpy
     enthalpyReference = real_type_1d_view("reference enthalpy", kineticsModelDataDevice->nSpec + 1);
+
     {  // manually compute reference enthalpy on the device
         const auto per_team_extent_h = tChemLib::EnthalpyMass::getWorkSpaceSize(*kineticsModelDataDevice);
         const auto per_team_scratch_h = Scratch<real_type_1d_view>::shmem_size(per_team_extent_h);
@@ -77,11 +78,12 @@ ablate::eos::TChemSoot::TChemSoot(std::filesystem::path mechanismFileIn, std::fi
         Kokkos::deep_copy(Kokkos::subview(enthalpyReference, std::make_pair(1, kineticsModelDataDevice->nSpec + 1)), Kokkos::subview(perSpeciesDevice, 0, Kokkos::ALL()));
         // Now put in reference enthalpy for Carbon
         enthalpyReference(0) = CarbonEnthalpy_R_T(TREF) * TREF * kineticsModelDataDevice->Runiv / MWCarbon;  // TODO::Check that Runiv is correct units
+
     }
 }
 
 std::shared_ptr<ablate::eos::TChemSoot::FunctionContext> ablate::eos::TChemSoot::BuildFunctionContext(ablate::eos::ThermodynamicProperty property, const std::vector<domain::Field> &fields) const {
-    // STILL NEED TO THINK OF WHAT I WANT TO PASS TO EACH FUNCTION
+    // TODO: STILL NEED TO THINK OF WHAT I WANT TO PASS TO EACH FUNCTION
 
     // Look for the euler field
     auto eulerField = std::find_if(fields.begin(), fields.end(), [](const auto &field) { return field.name == ablate::finiteVolume::CompressibleFlowFields::EULER_FIELD; });
@@ -96,6 +98,7 @@ std::shared_ptr<ablate::eos::TChemSoot::FunctionContext> ablate::eos::TChemSoot:
 
     // determine the state vector size
     const ordinal_type stateVecDim = tChemLib::Impl::getStateVectorSize(kineticsModelDataDevice->nSpec) + 1;  // Extra 1 for YC
+
     const ordinal_type batchSize = 1;
 
     // get the property string
@@ -103,7 +106,9 @@ std::shared_ptr<ablate::eos::TChemSoot::FunctionContext> ablate::eos::TChemSoot:
 
     // set device information
     real_type_2d_view stateDevice(propertyName + " state device", batchSize, stateVecDim);
+
     real_type_2d_view perSpeciesDevice(propertyName + " perSpecies device", batchSize, kineticsModelDataDevice->nSpec + 1);  // Include YCarbon_Solid as Part of the species array
+
     real_type_1d_view mixtureDevice(propertyName + " mixture device", batchSize);
 
     auto per_team_scratch_cp = tChemLib::Scratch<real_type_1d_view>::shmem_size(std::get<2>(thermodynamicFunctions.at(property))(kineticsModelDataDevice->nSpec));
@@ -114,6 +119,7 @@ std::shared_ptr<ablate::eos::TChemSoot::FunctionContext> ablate::eos::TChemSoot:
     return std::make_shared<FunctionContext>(FunctionContext{.dim = eulerField->numberComponents - 2,    // Number of physical dimensions
                                                              .eulerOffset = eulerField->offset,          // Offset of data to eulerField
                                                              .densityYiOffset = densityYiField->offset,  // Offset of data to density filed
+
 
                                                              // set device information
                                                              .stateDevice = stateDevice,
@@ -128,6 +134,7 @@ std::shared_ptr<ablate::eos::TChemSoot::FunctionContext> ablate::eos::TChemSoot:
                                                              // store the reference enthalpy
                                                              .enthalpyReference = enthalpyReference,  // Full Reference enthalpy information
 
+
                                                              // policy
                                                              .policy = policy,
 
@@ -136,6 +143,7 @@ std::shared_ptr<ablate::eos::TChemSoot::FunctionContext> ablate::eos::TChemSoot:
 }
 
 // These Next 5 are the same as regular TCHEM
+
 ablate::eos::ThermodynamicFunction ablate::eos::TChemSoot::GetThermodynamicFunction(ablate::eos::ThermodynamicProperty property, const std::vector<domain::Field> &fields) const {
     return ThermodynamicFunction{.function = std::get<0>(thermodynamicFunctions.at(property)), .context = BuildFunctionContext(property, fields)};
 }
@@ -149,12 +157,14 @@ void ablate::eos::TChemSoot::View(std::ostream &stream) const {
         stream << "\tthermoFile: " << thermoFile << std::endl;
     }
     stream << "\tnumberSpecies: " << species.size() << std::endl;
+
     //    tChemLib::exec_space::print_configuration(stream, true);
     //    tChemLib::host_exec_space::print_configuration(stream, true);
     // TODO: What is the class variable that this should reference if this is not a static function? There is no obvious choice of class variable for this.
 }
 
 // Returns the Total Density of the Mixture, This is a conserved variable and can just be returned
+
 PetscErrorCode ablate::eos::TChemSoot::DensityFunction(const PetscReal *conserved, PetscReal *density, void *ctx) {
     PetscFunctionBeginUser;
     auto functionContext = (FunctionContext *)ctx;
@@ -169,6 +179,7 @@ PetscErrorCode ablate::eos::TChemSoot::DensityTemperatureFunction(const PetscRea
 }
 
 // Returns the Temperature of the System, Returned from an iterative solution on the total sensible energy
+
 PetscErrorCode ablate::eos::TChemSoot::TemperatureFunction(const PetscReal *conserved, PetscReal *property, void *ctx) { return TemperatureTemperatureFunction(conserved, 300, property, ctx); }
 
 PetscErrorCode ablate::eos::TChemSoot::TemperatureTemperatureFunction(const PetscReal *conserved, PetscReal temperatureGuess, PetscReal *temperature, void *ctx) {
@@ -186,7 +197,9 @@ PetscErrorCode ablate::eos::TChemSoot::TemperatureTemperatureFunction(const Pets
 
     // Fill the working array
     auto stateHost = Kokkos::subview(functionContext->stateHost, 0, Kokkos::ALL());
+
     FillWorkingVectorFromDensityMassFractions(density, temperatureGuess, conserved + functionContext->densityYiOffset, stateHost, functionContext->kineticsModelDataDevice->nSpec + 1);
+
     Kokkos::deep_copy(functionContext->stateDevice, functionContext->stateHost);
     functionContext->mixtureHost[0] = internalEnergyRef;
     Kokkos::deep_copy(functionContext->mixtureDevice, functionContext->mixtureHost);
@@ -194,11 +207,13 @@ PetscErrorCode ablate::eos::TChemSoot::TemperatureTemperatureFunction(const Pets
 
     // compute the temperature
     ablate::eos::tChemSoot::Temperature::runDeviceBatch(functionContext->policy,
+
                                                         functionContext->stateDevice,
                                                         functionContext->mixtureDevice,
                                                         functionContext->perSpeciesDevice,
                                                         functionContext->enthalpyReference,
                                                         *functionContext->kineticsModelDataDevice);
+
 
     // copy back the results
     Kokkos::deep_copy(functionContext->stateHost, functionContext->stateDevice);
@@ -207,7 +222,9 @@ PetscErrorCode ablate::eos::TChemSoot::TemperatureTemperatureFunction(const Pets
     PetscFunctionReturn(0);
 }
 
+
 // Calculate the Internal Sensible Energy From the current state, i.e Etot - KE
+
 PetscErrorCode ablate::eos::TChemSoot::InternalSensibleEnergyFunction(const PetscReal *conserved, PetscReal *sensibleInternalEnergy, void *ctx) {
     PetscFunctionBeginUser;
     auto functionContext = (FunctionContext *)ctx;
@@ -231,6 +248,7 @@ PetscErrorCode ablate::eos::TChemSoot::InternalSensibleEnergyTemperatureFunction
 
     // Fill the working array
     auto stateHost = Kokkos::subview(functionContext->stateHost, 0, Kokkos::ALL());
+
     FillWorkingVectorFromDensityMassFractions(density, temperature, conserved + functionContext->densityYiOffset, stateHost, functionContext->kineticsModelDataDevice->nSpec + 1);
     Kokkos::deep_copy(functionContext->stateDevice, functionContext->stateHost);
 
@@ -255,11 +273,14 @@ PetscErrorCode ablate::eos::TChemSoot::PressureFunction(const PetscReal *conserv
     PetscErrorCode ierr = TemperatureFunction(conserved, &temperature, ctx);
     CHKERRQ(ierr);
     // Compute pressure with the temperature now known
+
     ierr = PressureTemperatureFunction(conserved, temperature, pressure, ctx);
     CHKERRQ(ierr);
     PetscFunctionReturn(0);
 }
+
 // Compute Pressure Assuming we know what the Temperature is
+
 PetscErrorCode ablate::eos::TChemSoot::PressureTemperatureFunction(const PetscReal *conserved, PetscReal temperature, PetscReal *pressure, void *ctx) {
     PetscFunctionBeginUser;
     auto functionContext = (FunctionContext *)ctx;
@@ -268,7 +289,9 @@ PetscErrorCode ablate::eos::TChemSoot::PressureTemperatureFunction(const PetscRe
 
     // Fill the working array
     auto stateHost = Kokkos::subview(functionContext->stateHost, 0, Kokkos::ALL());
+
     FillWorkingVectorFromDensityMassFractions(density, temperature, conserved + functionContext->densityYiOffset, stateHost, functionContext->kineticsModelDataDevice->nSpec + 1);
+
     Kokkos::deep_copy(functionContext->stateDevice, functionContext->stateHost);
 
     // compute the Pressure With Temperature Stored in StateDevice
@@ -276,10 +299,12 @@ PetscErrorCode ablate::eos::TChemSoot::PressureTemperatureFunction(const PetscRe
 
     // copy back the results
     Kokkos::deep_copy(functionContext->stateHost, functionContext->stateDevice);
+
     *pressure = stateHost[1];  // 1 is pressure state spot
 
     PetscFunctionReturn(0);
 }
+
 
 // Compute Sensible Enthalpy Without the temperature known, just the conservative values
 PetscErrorCode ablate::eos::TChemSoot::SensibleEnthalpyFunction(const PetscReal *conserved, PetscReal *sensibleEnthalpy, void *ctx) {
@@ -289,11 +314,14 @@ PetscErrorCode ablate::eos::TChemSoot::SensibleEnthalpyFunction(const PetscReal 
     PetscErrorCode ierr = TemperatureFunction(conserved, &temperature, ctx);
     CHKERRQ(ierr);
     // Now we know the temperature! compute the sensible enthalpy
+
     ierr = SensibleEnthalpyTemperatureFunction(conserved, temperature, sensibleEnthalpy, ctx);
     CHKERRQ(ierr);
     PetscFunctionReturn(0);
 }
+
 // Compute it with the Temperature Known
+
 PetscErrorCode ablate::eos::TChemSoot::SensibleEnthalpyTemperatureFunction(const PetscReal *conserved, PetscReal temperature, PetscReal *sensibleEnthalpy, void *ctx) {
     PetscFunctionBeginUser;
     auto functionContext = (FunctionContext *)ctx;
@@ -303,6 +331,7 @@ PetscErrorCode ablate::eos::TChemSoot::SensibleEnthalpyTemperatureFunction(const
 
     // Fill the working array
     auto stateHost = Kokkos::subview(functionContext->stateHost, 0, Kokkos::ALL());
+
     FillWorkingVectorFromDensityMassFractions(density, temperature, conserved + functionContext->densityYiOffset, stateHost, functionContext->kineticsModelDataDevice->nSpec + 1);
     Kokkos::deep_copy(functionContext->stateDevice, functionContext->stateHost);
 
@@ -338,7 +367,9 @@ PetscErrorCode ablate::eos::TChemSoot::SpeedOfSoundTemperatureFunction(const Pet
 
     // Fill the working array
     auto stateHost = Kokkos::subview(functionContext->stateHost, 0, Kokkos::ALL());
+
     FillWorkingVectorFromDensityMassFractions(density, temperature, conserved + functionContext->densityYiOffset, stateHost, functionContext->kineticsModelDataDevice->nSpec + 1);
+
     Kokkos::deep_copy(functionContext->stateDevice, functionContext->stateHost);
 
     ablate::eos::tChemSoot::SpeedOfSound::runDeviceBatch(functionContext->policy, functionContext->stateDevice, functionContext->mixtureDevice, *functionContext->kineticsModelDataDevice);
@@ -361,7 +392,9 @@ PetscErrorCode ablate::eos::TChemSoot::SpecificHeatConstantPressureFunction(cons
 
 PetscErrorCode ablate::eos::TChemSoot::SpecificHeatConstantPressureTemperatureFunction(const PetscReal *conserved, PetscReal temperature, PetscReal *cp, void *ctx) {
     PetscFunctionBeginUser;
+
     // The specific heat is a mass weighted term and thus can be broken up into a gaseos and solid contribution scaled by their relative mass fractions i.e (1-Yc) and (Yc)
+
     auto functionContext = (FunctionContext *)ctx;
 
     // Fill the working array
@@ -369,6 +402,7 @@ PetscErrorCode ablate::eos::TChemSoot::SpecificHeatConstantPressureTemperatureFu
 
     // Fill the working array
     auto stateHost = Kokkos::subview(functionContext->stateHost, 0, Kokkos::ALL());
+
     FillWorkingVectorFromDensityMassFractions(density, temperature, conserved + functionContext->densityYiOffset, stateHost, functionContext->kineticsModelDataDevice->nSpec + 1);
     Kokkos::deep_copy(functionContext->stateDevice, functionContext->stateHost);
 
@@ -398,6 +432,7 @@ PetscErrorCode ablate::eos::TChemSoot::SpecificHeatConstantVolumeTemperatureFunc
 
     // Fill the working array
     auto stateHost = Kokkos::subview(functionContext->stateHost, 0, Kokkos::ALL());
+
     FillWorkingVectorFromDensityMassFractions(density, temperature, conserved + functionContext->densityYiOffset, stateHost, functionContext->kineticsModelDataDevice->nSpec + 1);
     Kokkos::deep_copy(functionContext->stateDevice, functionContext->stateHost);
 
@@ -428,6 +463,7 @@ PetscErrorCode ablate::eos::TChemSoot::SpeciesSensibleEnthalpyTemperatureFunctio
 
     // Fill the working array
     auto stateHost = Kokkos::subview(functionContext->stateHost, 0, Kokkos::ALL());
+
     FillWorkingVectorFromDensityMassFractions(density, temperature, conserved + functionContext->densityYiOffset, stateHost, functionContext->kineticsModelDataDevice->nSpec + 1);
     Kokkos::deep_copy(functionContext->stateDevice, functionContext->stateHost);
 
@@ -460,6 +496,7 @@ void ablate::eos::TChemSoot::FillWorkingVectorFromDensityMassFractions(double &d
     if (yiSum > 1.0) {
         for (PetscInt s = 0; s < totNumSpec - 2; s++) {
             // Limit the bounds
+
             totalStateVector[3 + s] /= yiSum;
         }
         totalStateVector[2 + totNumSpec] /= yiSum;   // have to do carbon out of the loop since it jumps the dilute last species in statevector
@@ -474,17 +511,20 @@ ablate::eos::EOSFunction ablate::eos::TChemSoot::GetFieldFunctionFunction(const 
     if (finiteVolume::CompressibleFlowFields::EULER_FIELD == field) {
         if ((property1 == ThermodynamicProperty::Temperature && property2 == ThermodynamicProperty::Pressure) ||
             (property1 == ThermodynamicProperty::Pressure && property2 == ThermodynamicProperty::Temperature)) {
+
             // assume that the lambda are running on host
             using host_device_type = typename Tines::UseThisDevice<host_exec_space>::type;
             using host_type = tChemLib::UseThisTeamPolicy<tChemLib::host_exec_space>::type::member_type;
 
             // create reusable data for the lambda (all on host)
             auto kineticsModelDataHost = tChemLib::createGasKineticModelConstData<host_device_type>(kineticsModel);
+
             real_type_1d_view_host stateHostView("state device", tChemLib::Impl::getStateVectorSize(kineticsModelDataDevice->nSpec) + 1);  // 1 Extra for YCarbon
 
             // prepare to compute SensibleInternalEnergy
             typename tChemLib::UseThisTeamPolicy<tChemLib::host_exec_space>::type policy(1, Kokkos::AUTO());
             auto per_team_extent = (int)tChemSoot::SensibleInternalEnergy::getWorkSpaceSize(kineticsModelDataDevice->nSpec + 1);
+
             policy.set_scratch_size(1, Kokkos::PerTeam((int)tChemLib::Scratch<real_type_1d_view>::shmem_size(per_team_extent)));
             // store hi for the
             real_type_1d_view_host enthalpy("enthalpy", this->species.size());
@@ -495,6 +535,7 @@ ablate::eos::EOSFunction ablate::eos::TChemSoot::GetFieldFunctionFunction(const 
                         stateHostView(2) = temperature;
                         stateHostView(1) = pressure;
                         // fill the state
+
                         auto yiHost = Kokkos::subview(stateHostView, std::make_pair(3, 3 + kineticsModelDataDevice->nSpec));
                         // It is assumed that the first species are the gas species, so we rearrange the values here so Carbon is in the last spot
                         Kokkos::parallel_for(Tines::RangeFactory<real_type>::TeamVectorRange(member, kineticsModelDataDevice->nSpec), [&](const ordinal_type &i) { yiHost[i] = yi[i + 1]; });
@@ -543,18 +584,23 @@ ablate::eos::EOSFunction ablate::eos::TChemSoot::GetFieldFunctionFunction(const 
 
         if ((property1 == ThermodynamicProperty::InternalSensibleEnergy && property2 == ThermodynamicProperty::Pressure) ||
             (property1 == ThermodynamicProperty::Pressure && property2 == ThermodynamicProperty::InternalSensibleEnergy)) {
+
             // assume that the lambda are running on host
             using host_device_type = typename Tines::UseThisDevice<host_exec_space>::type;
             using host_type = tChemLib::UseThisTeamPolicy<tChemLib::host_exec_space>::type::member_type;
 
             // create reusable data for the lambda (all on host)
             auto kineticsModelDataHost = tChemLib::createGasKineticModelConstData<host_device_type>(kineticsModel);
+
             real_type_2d_view_host stateHostView("state device", 1, tChemLib::Impl::getStateVectorSize(kineticsModelDataDevice->nSpec) + 1);  // 1 extra for Ycarbon
+
             auto stateHost = Kokkos::subview(stateHostView, 0, Kokkos::ALL());
 
             // prepare to compute SensibleInternalEnergy
             typename tChemLib::UseThisTeamPolicy<tChemLib::host_exec_space>::type policy(1, Kokkos::AUTO());
+
             auto per_team_extent = (int)tChemSoot::SensibleInternalEnergy::getWorkSpaceSize(kineticsModelDataDevice->nSpec + 1);
+
             policy.set_scratch_size(1, Kokkos::PerTeam((int)tChemLib::Scratch<real_type_1d_view>::shmem_size(per_team_extent)));
             // store hi for the
             real_type_2d_view_host enthalpy("enthalpy", 1, kineticsModelDataDevice->nSpec);
@@ -562,6 +608,7 @@ ablate::eos::EOSFunction ablate::eos::TChemSoot::GetFieldFunctionFunction(const 
             real_type_1d_view_host internalEnergy("internal energy", 1);
 
             auto iep = [=](PetscReal sensibleInternalEnergy, PetscReal pressure, PetscInt dim, const PetscReal velocity[], const PetscReal yi[], PetscReal conserved[]) {
+
                 stateHost(2) = 300.;  // Temperature Initial Guess
                 stateHost(1) = pressure;
                 internalEnergy(0) = sensibleInternalEnergy;  // TODO: What does the input represent? What do I put here?
@@ -579,12 +626,14 @@ ablate::eos::EOSFunction ablate::eos::TChemSoot::GetFieldFunctionFunction(const 
                 real_type_1d_view_host state_at_i_gas = real_type_1d_view_host("Gaseous", TChem::Impl::getStateVectorSize(kineticsModelDataHost.nSpec));
                 ablate::eos::TChemSoot::SplitYiState<host_device_type, real_type_1d_view_host>(stateHost, state_at_i_gas, kineticsModelDataHost);
                 // Get the Gaseous State Vector
+
                 const Impl::StateVector<real_type_1d_view_host> sv_gas(kineticsModelDataHost.nSpec, state_at_i_gas);
 
                 // compute the temperature
                 eos::tChemSoot::Temperature::runHostBatch(policy, stateHostView, internalEnergy, enthalpy, enthalpyReference, kineticsModelDataHost);
 
                 // Compute the Density
+
                 Kokkos::parallel_for(
                     "tp Density Calc", policy, KOKKOS_LAMBDA(const host_type &member) {
                         PetscReal density = ablate::eos::tChemSoot::impl::densityFcn<real_type, host_device_type>::team_invoke(member, sv_gas, Yc, kineticsModelDataHost);
@@ -611,15 +660,18 @@ ablate::eos::EOSFunction ablate::eos::TChemSoot::GetFieldFunctionFunction(const 
             }
         }
         throw std::invalid_argument("Unknown property combination(" + std::string(to_string(property1)) + "," + std::string(to_string(property2)) + ") for " + field + " for ablate::eos::PerfectGas.");
+
     } else if (finiteVolume::CompressibleFlowFields::DENSITY_YI_FIELD == field) {
         if ((property1 == ThermodynamicProperty::Temperature && property2 == ThermodynamicProperty::Pressure) ||
             (property1 == ThermodynamicProperty::Pressure && property2 == ThermodynamicProperty::Temperature)) {
+            
             // assume that the lambda are running on host
             using host_device_type = typename Tines::UseThisDevice<host_exec_space>::type;
             using host_type = tChemLib::UseThisTeamPolicy<tChemLib::host_exec_space>::type::member_type;
 
             // create reusable data for the lambda (all on host)
             auto kineticsModelDataHost = tChemLib::createGasKineticModelConstData<host_device_type>(kineticsModel);
+
             real_type_1d_view_host stateHostView("state device", tChemLib::Impl::getStateVectorSize(kineticsModelDataDevice->nSpec) + 1);  // 1 Extra for YCarbon
 
             // prepare to compute SensibleInternalEnergy
@@ -631,6 +683,7 @@ ablate::eos::EOSFunction ablate::eos::TChemSoot::GetFieldFunctionFunction(const 
                         // fill the state
                         stateHostView(2) = temperature;
                         stateHostView(1) = pressure;
+
                         auto yiHost = Kokkos::subview(stateHostView, std::make_pair(3, 3 + kineticsModelDataDevice->nSpec));
                         Kokkos::parallel_for(Tines::RangeFactory<real_type>::TeamVectorRange(member, kineticsModelDataHost.nSpec), [&](const ordinal_type &i) { yiHost[i] = yi[i + 1]; });
                         auto Yc = yi[0];
@@ -659,18 +712,23 @@ ablate::eos::EOSFunction ablate::eos::TChemSoot::GetFieldFunctionFunction(const 
 
         } else if ((property1 == ThermodynamicProperty::InternalSensibleEnergy && property2 == ThermodynamicProperty::Pressure) ||
                    (property1 == ThermodynamicProperty::Pressure && property2 == ThermodynamicProperty::InternalSensibleEnergy)) {
+
             // assume that the lambda are running on host
             using host_device_type = typename Tines::UseThisDevice<host_exec_space>::type;
             using host_type = tChemLib::UseThisTeamPolicy<tChemLib::host_exec_space>::type::member_type;
 
             // create reusable data for the lambda (all on host)
             auto kineticsModelDataHost = tChemLib::createGasKineticModelConstData<host_device_type>(kineticsModel);
+
             real_type_2d_view_host stateHostView("state device", 1, tChemLib::Impl::getStateVectorSize(kineticsModelDataDevice->nSpec) + 1);  // 1 extra for Ycarbon
+
             auto stateHost = Kokkos::subview(stateHostView, 0, Kokkos::ALL());
 
             // prepare to compute SensibleInternalEnergy
             typename tChemLib::UseThisTeamPolicy<tChemLib::host_exec_space>::type policy(1, Kokkos::AUTO());
+
             auto per_team_extent = (int)tChemSoot::SensibleInternalEnergy::getWorkSpaceSize(kineticsModelDataDevice->nSpec + 1);
+
             policy.set_scratch_size(1, Kokkos::PerTeam((int)tChemLib::Scratch<real_type_1d_view>::shmem_size(per_team_extent)));
             // store hi for the
             real_type_2d_view_host enthalpy("enthalpy", 1, kineticsModelDataDevice->nSpec);
@@ -678,6 +736,7 @@ ablate::eos::EOSFunction ablate::eos::TChemSoot::GetFieldFunctionFunction(const 
             real_type_1d_view_host internalEnergy("internal energy", 1);
 
             auto densityYiFromIeP = [=](PetscReal sensibleInternalEnergy, PetscReal pressure, PetscInt dim, const PetscReal velocity[], const PetscReal yi[], PetscReal conserved[]) {
+
                 stateHost(2) = 300.;  // Temperature Initial Guess
                 stateHost(1) = pressure;
                 internalEnergy(0) = sensibleInternalEnergy;  // TODO: Same as other
@@ -695,6 +754,7 @@ ablate::eos::EOSFunction ablate::eos::TChemSoot::GetFieldFunctionFunction(const 
                 real_type_1d_view_host state_at_i_gas = real_type_1d_view_host("Gaseous", TChem::Impl::getStateVectorSize(kineticsModelDataHost.nSpec));
                 ablate::eos::TChemSoot::SplitYiState<host_device_type, real_type_1d_view_host>(stateHost, state_at_i_gas, kineticsModelDataHost);
                 // Get the Gaseous State Vector
+
                 const Impl::StateVector<real_type_1d_view_host> sv_gas(kineticsModelDataHost.nSpec, state_at_i_gas);
 
                 // compute the temperature
@@ -705,6 +765,7 @@ ablate::eos::EOSFunction ablate::eos::TChemSoot::GetFieldFunctionFunction(const 
                     "tp Density Calc", policy, KOKKOS_LAMBDA(const host_type &member) {
                         PetscReal density = ablate::eos::tChemSoot::impl::densityFcn<real_type, host_device_type>::team_invoke(member, sv_gas, Yc, kineticsModelDataHost);
                         Kokkos::parallel_for(Tines::RangeFactory<real_type>::TeamVectorRange(member, kineticsModelDataHost.nSpec + 1), [&](const ordinal_type &i) { conserved[i] = density * yi[i]; });
+
                     });
             };
 
@@ -739,6 +800,7 @@ std::map<std::string, double> ablate::eos::TChemSoot::GetElementInformation() co
 }
 
 // should be good
+
 std::map<std::string, std::map<std::string, int>> ablate::eos::TChemSoot::GetSpeciesElementalInformation() const {
     // build the element names
     auto eNamesHost = kineticsModel.eNames_.view_host();
@@ -772,6 +834,7 @@ std::map<std::string, std::map<std::string, int>> ablate::eos::TChemSoot::GetSpe
 }
 
 // Should be good
+
 std::map<std::string, double> ablate::eos::TChemSoot::GetSpeciesMolecularMass() const {
     // march over each species
     auto sMass = kineticsModel.sMass_.view_host();
