@@ -590,14 +590,9 @@ PetscErrorCode ablate::domain::SubDomain::GetFieldLocalVector(const ablate::doma
 PetscErrorCode ablate::domain::SubDomain::RestoreFieldLocalVector(const ablate::domain::Field& field, IS* vecIs, Vec* vec, DM* subdm) {
     PetscFunctionBeginUser;
 
-    if (field.location == FieldLocation::SOL) {
+    if ( (field.location == FieldLocation::SOL) || (field.location == FieldLocation::AUX)) {
         // In the Get call, the vecIS was already cleaned up and vec is only a localVec
         PetscCall(DMRestoreLocalVector(*subdm, vec));
-        PetscCall(DMDestroy(subdm));
-    } else if (field.location == FieldLocation::AUX) {
-        auto entireVec = GetAuxVector();
-        PetscCall(VecRestoreSubVector(entireVec, *vecIs, vec));
-        PetscCall(ISDestroy(vecIs));
         PetscCall(DMDestroy(subdm));
     } else {
         SETERRQ(GetComm(), PETSC_ERR_SUP, "%s", "Unknown field location");
