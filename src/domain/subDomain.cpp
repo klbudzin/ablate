@@ -555,39 +555,35 @@ PetscErrorCode ablate::domain::SubDomain::RestoreFieldGlobalVector(const Field& 
 
 PetscErrorCode ablate::domain::SubDomain::GetFieldLocalVector(const ablate::domain::Field& field, PetscReal time, IS* vecIs, Vec* vec, DM* subdm) {
     PetscFunctionBeginUser;
-
+    DM entireDm;
+    Vec entireVec;
     if (field.location == FieldLocation::SOL) {
-        // Get the correct dm
-        auto entireDm = GetDM();
-        auto entireVec = GetSolutionVector();
-
-        // Create a subDM
-        PetscCall(DMCreateSubDM(entireDm, 1, &field.id, vecIs, subdm));
-
-        // Use a global vector to get the results
-        Vec subGlobalVector;
-        PetscCall(VecGetSubVector(entireVec, *vecIs, &subGlobalVector));
-
-        // Make a local version of the vector
-        PetscCall(DMGetLocalVector(*subdm, vec));
-        PetscCall(DMPlexInsertBoundaryValues(*subdm, PETSC_TRUE, *vec, time, nullptr, nullptr, nullptr));
-        PetscCall(DMGlobalToLocalBegin(*subdm, subGlobalVector, INSERT_VALUES, *vec));
-        PetscCall(DMGlobalToLocalEnd(*subdm, subGlobalVector, INSERT_VALUES, *vec));
-
-        // We have the filled local vec subdm, so clean up the subGlobalVector and vecIS
-        PetscCall(VecRestoreSubVector(entireVec, *vecIs, &subGlobalVector));
-        PetscCall(ISDestroy(vecIs); *vecIs = nullptr);
+        // Get the sol dm
+        entireDm = GetDM();
+        entireVec = GetSolutionVector();
     } else if (field.location == FieldLocation::AUX) {
-        auto entireDm = GetAuxDM();
-        auto entireVec = GetAuxVector();
-
-        PetscCall(DMCreateSubDM(entireDm, 1, &field.id, vecIs, subdm));
-
-        // Get the sub vector
-        PetscCall(VecGetSubVector(entireVec, *vecIs, vec));
+        // Get the aux dm
+        entireDm = GetAuxDM();
+        entireVec = GetAuxGlobalVector();
     } else {
         SETERRQ(GetComm(), PETSC_ERR_SUP, "%s", "Unknown field location");
     }
+   // Create a subDM
+    PetscCall(DMCreateSubDM(entireDm, 1, &field.id, vecIs, subdm));
+
+    // Use a global vector to get the results
+    Vec subGlobalVector;
+    PetscCall(VecGetSubVector(entireVec, *vecIs, &subGlobalVector));
+
+    // Make a local version of the vector
+    PetscCall(DMGetLocalVector(*subdm, vec));
+    PetscCall(DMPlexInsertBoundaryValues(*subdm, PETSC_TRUE, *vec, time, nullptr, nullptr, nullptr));
+    PetscCall(DMGlobalToLocalBegin(*subdm, subGlobalVector, INSERT_VALUES, *vec));
+    PetscCall(DMGlobalToLocalEnd(*subdm, subGlobalVector, INSERT_VALUES, *vec));
+
+    // We have the filled local vec subdm, so clean up the subGlobalVector and vecIS
+    PetscCall(VecRestoreSubVector(entireVec, *vecIs, &subGlobalVector));
+    PetscCall(ISDestroy(vecIs); *vecIs = nullptr);
 
     PetscFunctionReturn(0);
 }
