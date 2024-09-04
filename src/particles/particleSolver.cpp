@@ -387,7 +387,31 @@ void ablate::particles::ParticleSolver::SwarmMigrate() {
     dmChanged = dmChangedAll > 0;
 }
 
+void ablate::particles::ParticleSolver::CheckForNewParticles() {
+    if (!NewParticles.empty()) {
+        //Tell the dm we're changing the particle sizing so it can appropriately fix the solution vector in the ts
+        dmChanged = true;
+        //March through each particle and add it to the DM
+        PetscInt dim;
+        DMGetDimension(swarmDm, &dim) >> utilities::PetscUtilities::checkError;
+        Particle part;
+        int N_newParticles = NewParticles.size();
+        //Eventually Change to just adding NParticles and using the swarmAcessor to change their values
+        for(auto i =0; i < N_newParticles; i++) {
+            part = NewParticles.back();
+            DMSwarmSetPointCoordinates(swarmDm,1,part.Coords,PETSC_FALSE, ADD_VALUES);
+            //Next do something with fields
+
+            //Remove Particle from vector
+            NewParticles.pop_back();
+        }
+
+    }
+};
+
 void ablate::particles::ParticleSolver::MacroStepParticles(TS macroTS, bool swarmMigrate) {
+
+    CheckForNewParticles();
     // if the dm has changed size (new particles, particles moved between ranks, particles deleted) reset the ts
     if (dmChanged) {
         TSReset(particleTs) >> utilities::PetscUtilities::checkError;

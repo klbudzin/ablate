@@ -8,6 +8,30 @@
 #include "solver/solver.hpp"
 
 namespace ablate::particles {
+template <class DataType>
+struct NewParticleData {
+    //! the array for the solution values
+    DataType* Coords = nullptr;
+    DataType* FieldValues = nullptr;
+//    std::vector<Field> ExtraFields;
+    /**
+     * empty default constructor
+     */
+    NewParticleData() = default;
+
+    /**
+     * The default constructor
+     * @param values
+     * @param numberComponents
+     * @param dataSizeIn
+     * @param offset
+     */
+    NewParticleData(DataType* Coords,DataType* FieldValues) :
+    Coords(Coords), FieldValues(FieldValues) {}// ,ExtraFields(std::move(FieldsSpecified)) {}
+
+    NewParticleData(DataType* Coords): Coords(Coords) {}
+};
+using Particle = NewParticleData<PetscReal>;
 
 class ParticleSolver : public solver::Solver, public io::Serializable {
    public:
@@ -61,6 +85,8 @@ class ParticleSolver : public solver::Solver, public io::Serializable {
     //! store the exact solution if provided
     const std::vector<std::shared_ptr<mathFunctions::FieldFunction>> exactSolutions;
 
+    std::vector<Particle> NewParticles;
+
    public:
     /**
      * default constructor
@@ -109,6 +135,18 @@ class ParticleSolver : public solver::Solver, public io::Serializable {
      * @return the swamParticle dm
      */
     inline TS GetParticleTS() { return particleTs; }
+
+    /**
+     * Return access to the new particle vector for adding in particles
+     * @return the new particl vector
+     */
+    inline std::vector<Particle> & getNewParticleVector() { return NewParticles; }
+
+    /**
+     * Return access to the fields defining this particle solver
+     * @return the fields known to the particle solver
+     */
+     inline std::vector<Field> & getFields() { return fields; }
 
     /**
      * Helper function useful for tests
@@ -186,6 +224,11 @@ class ParticleSolver : public solver::Solver, public io::Serializable {
      * map the solution vector coordinates to the particle coordinates
      */
     void CoordinatesFromSolutionVector();
+
+    /**
+     * Check if there are new particles to be added to dm and add them
+     */
+     void CheckForNewParticles();
 
    protected:
     /**
