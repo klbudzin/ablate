@@ -1,0 +1,49 @@
+Timestep: 0000 time = 0        dt = 1e-05
+flowParticles Count: 0
+flowParticles Avg: [0., 0.]
+Timestep: 0001 time = 1e-05    dt = 1.06085e-05
+flowParticles Count: 0
+flowParticles Avg: [0., 0.]
+Timestep: 0002 time = 2.061e-05 dt = 1.43614e-05
+flowParticles Count: 0
+flowParticles Avg: [0., 0.]
+Timestep: 0003 time = 3.497e-05 dt = 1.92199e-05
+flowParticles Count: 0
+flowParticles Avg: [0., 0.]
+Timestep: 0004 time = 5.419e-05 dt = 2.39693e-05
+flowParticles Count: 0
+flowParticles Avg: [0., 0.]
+Timestep: 0005 time = 7.816e-05 dt = 3.16864e-05
+flowParticles Count: 1
+flowParticles Avg: [0.165647, 1.67571e-05]
+Timestep: 0006 time = 0.0001098 dt = 4.0764e-05
+flowParticles Count: 4
+flowParticles Avg: [0.137701, 0.000956832]
+Timestep: 0007 time = 0.0001506 dt = 5.20199e-05
+flowParticles Count: 4
+flowParticles Avg: [0.137754, 0.000970887]
+Timestep: 0008 time = 0.0001951 dt = 4.70918e-05
+flowParticles Count: 5
+flowParticles Avg: [0.110269, 0.00804325]
+Timestep: 0009 time = 0.0002225 dt = 3.53385e-05
+flowParticles Count: 6
+flowParticles Avg: [0.0919342, 0.0119216]
+Timestep: 0010 time = 0.0002578 dt = 3.22674e-05
+flowParticles Count: 6
+flowParticles Avg: [0.0919888, 0.0119354]
+ResultFiles:
+FlowField
+FlowField.00000.hdf5
+FlowField.00001.hdf5
+FlowField.xmf
+domain
+domain.00000.hdf5
+domain.00001.hdf5
+domain.xmf
+flowParticles
+flowParticles.00000.hdf5
+flowParticles.00001.hdf5
+flowParticles.xmf
+pgsLog
+restart.bak
+restart.rst
