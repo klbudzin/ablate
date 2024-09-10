@@ -9,4 +9,5 @@ target_sources(ablateLibrary
         rhsAccessor.hpp
         eulerianAccessor.hpp
         eulerianSourceAccessor.hpp
+        mutableSwarmAccessor.hpp
         )

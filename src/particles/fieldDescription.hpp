@@ -13,7 +13,7 @@ struct FieldDescription {
     const std::string name;
 
     //! Optional name of the components.  This is used to determine the number of components
-    const std::vector<std::string> components = {"_"};
+    std::vector<std::string> components = {"_"};
 
     //! The type of field, (solution or aux)
     enum domain::FieldLocation location = domain::FieldLocation::AUX;
@@ -22,6 +22,8 @@ struct FieldDescription {
     const PetscDataType dataType = PETSC_REAL;
 
    public:
+    //Function to decompress defined solution/aux variable to the appropriate dimension of the mesh
+    void DecompressComponents(PetscInt ndims);
     /**
      * default constructor
      * @param name name of the field
