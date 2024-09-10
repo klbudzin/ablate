@@ -226,6 +226,11 @@ class ParticleSolver : public solver::Solver, public io::Serializable {
     void CoordinatesFromSolutionVector();
 
     /**
+     * Decode any solver specific Auxillary Variables from solution vector (Burning Particles)
+     */
+    virtual void DecodeSolverAuxVariables();
+
+    /**
      * Check if there are new particles to be added to dm and add them
      */
      void CheckForNewParticles();

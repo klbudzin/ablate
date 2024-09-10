@@ -182,6 +182,14 @@ void ablate::particles::CoupledParticleSolver::Initialize() {
 }
 
 void ablate::particles::CoupledParticleSolver::MacroStepParticles(TS macroTS, bool swarmMigrate) {
+    //Check if new particles were added during the eulariant timestepper
+    CheckForNewParticles();
+    //if the dm has changed size (new particles, particles between ranks, particles deleted) reset the ts
+    if (dmChanged) {
+        TSReset(particleTs) >> utilities::PetscUtilities::checkError;
+        dmChanged = PETSC_FALSE;
+    }
+
     // This function is called after the flow/main TS is advanced so all source terms should have already been added to the flow solver, so reset them to zero here.
     // march over every coupled field
     for (const auto& coupledParticleFieldName : coupledParticleFieldsNames) {
@@ -212,6 +220,9 @@ void ablate::particles::CoupledParticleSolver::MacroStepParticles(TS macroTS, bo
 
     // Update the source terms
     ComputeEulerianSource(startTime, endTime);
+
+    //Decode any Aux Variables from the new solution
+    DecodeSolverAuxVariables();
 
     // Migrate any particles that have moved now that we have done the other calculations
     if (swarmMigrate) {

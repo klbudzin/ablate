@@ -78,6 +78,8 @@ void ablate::particles::ParticleSolver::Setup() {
 
     // march over each field and record the field description
     for (auto &fieldsDescription : fieldsDescriptions) {
+        //Check if we should convert the fieldDescription components to include all the dimensions
+        fieldsDescription.DecompressComponents(ndims);
         RegisterParticleField(fieldsDescription);
     }
 
@@ -162,6 +164,9 @@ void ablate::particles::ParticleSolver::Initialize() {
 
     // link the solution with the flowTS
     RegisterPostStep([this](TS flowTs, ablate::solver::Solver &) { MacroStepParticles(flowTs, true); });
+
+    //initialize the auxFields that should be computed from solution Variables
+    DecodeSolverAuxVariables();
 }
 
 void ablate::particles::ParticleSolver::RegisterParticleField(const FieldDescription &fieldDescription) {
@@ -409,6 +414,7 @@ void ablate::particles::ParticleSolver::CheckForNewParticles() {
     }
 };
 
+//Post TimeRHS step
 void ablate::particles::ParticleSolver::MacroStepParticles(TS macroTS, bool swarmMigrate) {
 
     CheckForNewParticles();
@@ -451,6 +457,9 @@ void ablate::particles::ParticleSolver::MacroStepParticles(TS macroTS, bool swar
 
     // Decode the solution vector to coordinates
     CoordinatesFromSolutionVector();
+
+    //Decode any Aux Variables from the new solution
+    DecodeSolverAuxVariables();
 
     // Migrate any particles that have moved
     if (swarmMigrate) {
@@ -795,6 +804,8 @@ PetscErrorCode ablate::particles::ParticleSolver::Restore(PetscViewer viewer, Pe
     dmChanged = true;
     PetscFunctionReturn(0);
 }
+
+void ablate::particles::ParticleSolver::DecodeSolverAuxVariables() {}
 
 #include "registrar.hpp"
 REGISTER(ablate::solver::Solver, ablate::particles::ParticleSolver, "Lagrangian particle solver", ARG(std::string, "id", "the name of the particle solver"),
