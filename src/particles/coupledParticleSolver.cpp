@@ -248,7 +248,7 @@ void ablate::particles::CoupledParticleSolver::ComputeEulerianSource(PetscReal s
         accessors::EulerianSourceAccessor eulerianSourceAccessor(cachePointData, swarmDm, fieldsMap);
 
         for (auto& coupledProcess : coupledProcesses) {
-            coupledProcess->ComputeEulerianSource(startTime, endTime, swarmAccessorPreStep, swarmAccessorPostStep, eulerianSourceAccessor);
+            coupledProcess->ComputeEulerianSource(startTime, endTime, ndims, swarmAccessorPreStep, swarmAccessorPostStep, eulerianSourceAccessor);
         }
     }
 

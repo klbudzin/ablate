@@ -4,6 +4,7 @@ target_sources(ablateLibrary
         inertial.cpp
         arbitraryEulerianSource.cpp
         convectiveHeatTransfer.cpp
+        coupledDrag.cpp
 
         PUBLIC
         process.hpp
@@ -12,6 +13,7 @@ target_sources(ablateLibrary
         coupledProcess.hpp
         arbitraryEulerianSource.hpp
         convectiveHeatTransfer.hpp
+        coupledDrag.hpp
         )
 
 add_subdirectory(drag)

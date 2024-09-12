@@ -35,7 +35,7 @@ class ArbitraryEulerianSource : public CoupledProcess {
      * @param swarmAccessorPostStep
      * @param eulerianSourceAccessor
      */
-    void ComputeEulerianSource(PetscReal startTime, PetscReal endTime, accessors::SwarmAccessor& swarmAccessorPreStep, accessors::SwarmAccessor& swarmAccessorPostStep,
+    void ComputeEulerianSource(PetscReal startTime, PetscReal endTime, PetscInt ndims, accessors::SwarmAccessor& swarmAccessorPreStep, accessors::SwarmAccessor& swarmAccessorPostStep,
                                accessors::EulerianSourceAccessor& eulerianSourceAccessor) override;
 };
 

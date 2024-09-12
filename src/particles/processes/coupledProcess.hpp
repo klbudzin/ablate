@@ -19,7 +19,7 @@ class CoupledProcess : public ablate::particles::processes::Process {
      * @param swarmAccessorPostStep the particle values after the time step
      * @param eulerianSourceAccessor the available eulerian source term
      */
-    virtual void ComputeEulerianSource(PetscReal startTime, PetscReal endTime, accessors::SwarmAccessor& swarmAccessorPreStep, accessors::SwarmAccessor& swarmAccessorPostStep,
+    virtual void ComputeEulerianSource(PetscReal startTime, PetscReal endTime, PetscInt ndims, accessors::SwarmAccessor& swarmAccessorPreStep, accessors::SwarmAccessor& swarmAccessorPostStep,
                                        accessors::EulerianSourceAccessor& eulerianSourceAccessor) = 0;
 };
 
