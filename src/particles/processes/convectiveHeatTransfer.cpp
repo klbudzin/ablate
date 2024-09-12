@@ -32,11 +32,11 @@ void ablate::particles::processes::ConvectiveHeatTransfer::ComputeRHS(PetscReal 
     PetscReal SAtot;
     for(PetscInt p = 0; p < Nparticles; p++) {
         SAtot = particlesPerParcel(p)*PETSC_PI*std::pow(avgDiameter(p),2);
-        particleTemperatureRHS(p) = convCoefficient*(eulerianTemperature(p)-Tp(p))*SAtot/(massParcel(p)*cp(p));
+        particleTemperatureRHS(p) += convCoefficient*(eulerianTemperature(p)-Tp(p))*SAtot/(massParcel(p)*cp(p));
     }
 }
 
-void ablate::particles::processes::ConvectiveHeatTransfer::ComputeEulerianSource(PetscReal startTime, PetscReal endTime, ablate::particles::accessors::SwarmAccessor& swarmAccessorPreStep,
+void ablate::particles::processes::ConvectiveHeatTransfer::ComputeEulerianSource(PetscReal startTime, PetscReal endTime, PetscInt ndims, ablate::particles::accessors::SwarmAccessor& swarmAccessorPreStep,
                                                                                   ablate::particles::accessors::SwarmAccessor& swarmAccessorPostStep,
                                                                                   ablate::particles::accessors::EulerianSourceAccessor& eulerianSourceAccessor) {
     //We need to communicate the energy that was transfer to/from the eulerian field to the particle back to the eulerian field rhoEnergy

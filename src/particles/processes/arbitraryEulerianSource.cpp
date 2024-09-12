@@ -6,7 +6,7 @@
 ablate::particles::processes::ArbitraryEulerianSource::ArbitraryEulerianSource(std::string coupledFieldName, std::shared_ptr<mathFunctions::MathFunction> sourceFunction)
     : coupledFieldName(std::move(coupledFieldName)), sourceFunction(std::move(sourceFunction)) {}
 
-void ablate::particles::processes::ArbitraryEulerianSource::ComputeEulerianSource(PetscReal startTime, PetscReal endTime, ablate::particles::accessors::SwarmAccessor& swarmAccessorPreStep,
+void ablate::particles::processes::ArbitraryEulerianSource::ComputeEulerianSource(PetscReal startTime, PetscReal endTime, PetscInt ndims, ablate::particles::accessors::SwarmAccessor& swarmAccessorPreStep,
                                                                                   ablate::particles::accessors::SwarmAccessor& swarmAccessorPostStep,
                                                                                   ablate::particles::accessors::EulerianSourceAccessor& eulerianSourceAccessor) {
     // Get sizes from the accessors

@@ -1,15 +1,17 @@
-#ifndef ABLATELIBRARY_CONVECTIVEHEATTRANSFER_HPP
-#define ABLATELIBRARY_CONVECTIVEHEATTRANSFER_HPP
+#ifndef ABLATELIBRARY_COUPLEDDRAG_HPP
+#define ABLATELIBRARY_COUPLEDDRAG_HPP
 
 #include <string>
 #include "coupledProcess.hpp"
-
+#include "eos/eos.hpp"
+#include "eos/transport/transportModel.hpp"
 namespace ablate::particles::processes {
 
-class ConvectiveHeatTransfer : public CoupledProcess {
+class CoupledDrag : public CoupledProcess {
    private:
-    // convective coefficient in h (T_{eularian}-T_{particle}) *SA_{tot}
-    const PetscReal convCoefficient;
+    //Need the function to calculate viscosity from local temperature.
+    eos::ThermodynamicTemperatureFunction viscosityFunction;
+    const std::vector<PetscReal> gravity;
 
    public:
     /**
@@ -17,7 +19,7 @@ class ConvectiveHeatTransfer : public CoupledProcess {
      * @param coupledFieldName the name of the eulerian coupled field
      * @param sourceFunction the function to compute the source
      */
-    ConvectiveHeatTransfer(PetscReal h);
+    CoupledDrag(std::shared_ptr<ablate::eos::transport::TransportModel> transportModel, const std::vector<PetscReal>& gravity);
 
     /**
      * RHS function for the particle
