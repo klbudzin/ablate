@@ -13,6 +13,9 @@ void ablate::monitors::MixtureFractionMonitor::Register(std::shared_ptr<solver::
     // Define the required fields
     std::vector<std::shared_ptr<domain::FieldDescriptor>> fields{
         std::make_shared<domain::FieldDescription>("zMix", "zMix", domain::FieldDescription::ONECOMPONENT, domain::FieldLocation::SOL, domain::FieldType::FVM),
+        std::make_shared<domain::FieldDescription>("rho", "rho", domain::FieldDescription::ONECOMPONENT, domain::FieldLocation::SOL, domain::FieldType::FVM),
+        std::make_shared<domain::FieldDescription>(ablate::finiteVolume::CompressibleFlowFields::TEMPERATURE_FIELD, ablate::finiteVolume::CompressibleFlowFields::TEMPERATURE_FIELD, domain::FieldDescription::ONECOMPONENT, domain::FieldLocation::SOL, domain::FieldType::FVM),
+        std::make_shared<domain::FieldDescription>(ablate::finiteVolume::CompressibleFlowFields::PRESSURE_FIELD, ablate::finiteVolume::CompressibleFlowFields::PRESSURE_FIELD, domain::FieldDescription::ONECOMPONENT, domain::FieldLocation::SOL, domain::FieldType::FVM),
         std::make_shared<domain::FieldDescription>(ablate::finiteVolume::CompressibleFlowFields::YI_FIELD,
                                                    ablate::finiteVolume::CompressibleFlowFields::YI_FIELD,
                                                    mixtureFractionCalculator->GetEos()->GetSpeciesVariables(),
@@ -40,10 +43,15 @@ PetscErrorCode ablate::monitors::MixtureFractionMonitor::Save(PetscViewer viewer
     // get the required fields from the fieldDm and main dm
     const auto& zMixMonitorField = monitorSubDomain->GetField("zMix");
     const auto& yiMonitorField = monitorSubDomain->GetField(ablate::finiteVolume::CompressibleFlowFields::YI_FIELD);
+    const auto& temperatureMonitorField = monitorSubDomain->GetField(ablate::finiteVolume::CompressibleFlowFields::TEMPERATURE_FIELD);
+    const auto& pressureMonitorField = monitorSubDomain->GetField(ablate::finiteVolume::CompressibleFlowFields::PRESSURE_FIELD);
     const auto& energySourceField = monitorSubDomain->GetField("energySource");
     const auto& densityYiSourceField = monitorSubDomain->GetField("yiSource");
+    const auto& densityField = monitorSubDomain->GetField("rho");
     const auto& eulerField = GetSolver()->GetSubDomain().GetField(ablate::finiteVolume::CompressibleFlowFields::EULER_FIELD);
     const auto& densityYiField = GetSolver()->GetSubDomain().GetField(ablate::finiteVolume::CompressibleFlowFields::DENSITY_YI_FIELD);
+    const auto& temperatureField = GetSolver()->GetSubDomain().GetField(ablate::finiteVolume::CompressibleFlowFields::TEMPERATURE_FIELD);
+    const auto& pressureField = GetSolver()->GetSubDomain().GetField(ablate::finiteVolume::CompressibleFlowFields::PRESSURE_FIELD);
 
     // define a localFVec from the solution dm to compute the source terms
     Vec sourceTermVec = nullptr;
@@ -56,9 +64,11 @@ PetscErrorCode ablate::monitors::MixtureFractionMonitor::Save(PetscViewer viewer
 
     // Get the arrays for the global vectors
     const PetscScalar* solutionFieldArray;
+    const PetscScalar* auxFieldArray;
     PetscScalar* monitorFieldArray;
     PetscCall(VecGetArrayRead(GetSolver()->GetSubDomain().GetSolutionVector(), &solutionFieldArray));
     PetscCall(VecGetArray(monitorSubDomain->GetSolutionVector(), &monitorFieldArray));
+    PetscCall(VecGetArrayRead(GetSolver()->GetSubDomain().GetAuxVector(), &auxFieldArray));
 
     // check for the tmpLocalFArray
     const PetscScalar* sourceTermArray = nullptr;
@@ -95,6 +105,12 @@ PetscErrorCode ablate::monitors::MixtureFractionMonitor::Save(PetscViewer viewer
             continue;
         }
 
+        const PetscScalar* auxField = nullptr;
+        PetscCall(DMPlexPointGlobalRead(GetSolver()->GetSubDomain().GetDM(), solutionPt, auxFieldArray, &auxField));
+        if (!auxField) {
+            continue;
+        }
+
         PetscScalar* monitorField = nullptr;
         PetscCall(DMPlexPointGlobalRead(monitorSubDomain->GetDM(), monitorPt, monitorFieldArray, &monitorField));
 
@@ -102,11 +118,13 @@ PetscErrorCode ablate::monitors::MixtureFractionMonitor::Save(PetscViewer viewer
         if (sourceTermArray) {
             PetscCall(DMPlexPointGlobalRead(GetSolver()->GetSubDomain().GetDM(), solutionPt, sourceTermArray, &sourceTermField));
         }
+
         // Do not bother in ghost cells
         if (monitorField) {
             // compute the density from the solutionPt
             PetscReal density;
             PetscCall(densityFunction.function(solutionField, &density, densityFunctionContext));
+            monitorField[densityField.offset] = density;
 
             // Copy over and compute yi
             for (PetscInt sp = 0; sp < yiMonitorField.numberComponents; sp++) {
@@ -122,6 +140,10 @@ PetscErrorCode ablate::monitors::MixtureFractionMonitor::Save(PetscViewer viewer
                     monitorField[densityYiSourceField.offset + s] = sourceTermField[densityYiField.offset + s] / density;
                 }
             }
+
+            // Copy Over Temperature And Pressure from AuxField
+            monitorField[temperatureMonitorField.offset] = auxField[temperatureField.offset];
+            monitorField[pressureMonitorField.offset] = auxField[pressureField.offset];
         }
     }
 
