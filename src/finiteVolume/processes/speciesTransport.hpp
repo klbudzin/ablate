@@ -19,7 +19,7 @@ class SpeciesTransport : public FlowProcess {
         PetscInt numberSpecies;
 
         // EOS function calls
-        eos::ThermodynamicFunction computeTemperature;
+        eos::ThermodynamicTemperatureFunction computeTemperature;
         eos::ThermodynamicTemperatureFunction computeInternalEnergy;
         eos::ThermodynamicTemperatureFunction computeSpeedOfSound;
         eos::ThermodynamicTemperatureFunction computePressure;
@@ -87,7 +87,6 @@ class SpeciesTransport : public FlowProcess {
      */
     static void NormalizeSpecies(TS ts, ablate::solver::Solver&);
 
-   private:
     /**
      * This computes the energy transfer for species diffusion flux for rhoE
      * f = "euler"

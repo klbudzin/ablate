@@ -19,8 +19,8 @@ class NavierStokesTransport : public FlowProcess {
         /* number of gas species */
         PetscInt numberSpecies;
 
-        // EOS function calls
-        eos::ThermodynamicFunction computeTemperature;
+        // EOS function calls (For Temperature it's better to just use the TemperatureTemperature function so we can guess Temperature from t
+        eos::ThermodynamicTemperatureFunction computeTemperature;
         eos::ThermodynamicTemperatureFunction computeInternalEnergy;
         eos::ThermodynamicTemperatureFunction computeSpeedOfSound;
         eos::ThermodynamicTemperatureFunction computePressure;
@@ -38,7 +38,14 @@ class NavierStokesTransport : public FlowProcess {
         eos::ThermodynamicTemperatureFunction muFunction;
     };
 
-   private:
+   // static function to compute time step for euler advection
+   static double ComputeCflTimeStep(TS ts, ablate::finiteVolume::FiniteVolumeSolver& flow, void* ctx);
+    // static function to compute the conduction based time step
+    static double ComputeViscousDiffusionTimeStep(TS ts, ablate::finiteVolume::FiniteVolumeSolver& flow, void* ctx);
+    // static function to compute the conduction based time step
+    static double ComputeConductionTimeStep(TS ts, ablate::finiteVolume::FiniteVolumeSolver& flow, void* ctx);
+
+private:
     const std::shared_ptr<fluxCalculator::FluxCalculator> fluxCalculator;
     const std::shared_ptr<eos::EOS> eos;
     const std::shared_ptr<eos::transport::TransportModel> transportModel;
@@ -81,16 +88,7 @@ class NavierStokesTransport : public FlowProcess {
     };
     DiffusionTimeStepData diffusionTimeStepData;
 
-    // static function to compute time step for euler advection
-    static double ComputeCflTimeStep(TS ts, ablate::finiteVolume::FiniteVolumeSolver& flow, void* ctx);
-
-    // static function to compute the conduction based time step
-    static double ComputeConductionTimeStep(TS ts, ablate::finiteVolume::FiniteVolumeSolver& flow, void* ctx);
-
-    // static function to compute the conduction based time step
-    static double ComputeViscousDiffusionTimeStep(TS ts, ablate::finiteVolume::FiniteVolumeSolver& flow, void* ctx);
-
-   public:
+    public:
     /**
      * Function to compute the temperature field. This function assumes that the input values will be {"euler", "densityYi"}
      */
