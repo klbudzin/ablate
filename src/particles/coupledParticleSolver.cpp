@@ -218,11 +218,12 @@ void ablate::particles::CoupledParticleSolver::MacroStepParticles(TS macroTS, bo
     PetscReal endTime;
     TSGetTime(particleTs, &endTime) >> utilities::PetscUtilities::checkError;
 
+    //Decode any Aux Variables from the new solution before updating the eulerian source in case it uses any of the decoded
+    //Variables (Can eventually use this to bypass the timestepp if we ever want to in a process
+    DecodeSolverAuxVariables();
+
     // Update the source terms
     ComputeEulerianSource(startTime, endTime);
-
-    //Decode any Aux Variables from the new solution
-    DecodeSolverAuxVariables();
 
     // Migrate any particles that have moved now that we have done the other calculations
     if (swarmMigrate) {

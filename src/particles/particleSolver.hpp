@@ -41,6 +41,12 @@ class ParticleSolver : public solver::Solver, public io::Serializable {
     inline static const char ParticleDensity[] = "ParticleDensity";
     inline static const char PackedSolution[] = "PackedSolution";
     inline static const char ParticleInitialLocation[] = "InitialLocation";
+    /** More Common field names for burning particles **/
+    inline static const char ParticleCP[] = "ParticleSpecificHeat";
+    inline static const char ParticleTemperature[] = "ParticleTemperature";
+    inline static const char ParticleNPP[] = "ParticlesPerParcel";
+    inline static const char ParticleMass[] = "ParcelMass";
+    inline static const char ParticleBurning[] = "Burning";
 
     //! These coordinates are part of the solution vector
     inline static const char ParticleCoordinates[] = "coordinates";
