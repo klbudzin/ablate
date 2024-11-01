@@ -4,20 +4,15 @@
 #include "coupledParticleSolver.hpp"
 #include "processes/coupledProcess.hpp"
 #include "solver/rhsFunction.hpp"
-
+#include "particles/processes/burningProcess.hpp"
 namespace ablate::particles {
 
-/**
- * This is an extension of the particle solver that allows for fully coupled simulations.
- * The class implements the RHSFunction to allow inserting source terms back to main TS/flowfield
- */
 class BurningParticleSolver : public CoupledParticleSolver{
+    //minimum diameter a particle can be before it is extinguished
+    const PetscReal minimumDiameter;
+    std::shared_ptr<processes::BurningProcess> burningModel;
 
    public:
-    inline static const char ParticleCP[] = "ParticleSpecificHeat";
-    inline static const char ParticleTemperature[] = "ParticleTemperature";
-    inline static const char ParticleNPP[] = "ParticlesPerParcel";
-    inline static const char ParticleMass[] = "ParcelMass";
     /**
      * default constructor
      * @param solverId
@@ -31,8 +26,8 @@ class BurningParticleSolver : public CoupledParticleSolver{
      */
     BurningParticleSolver(std::string solverId, std::shared_ptr<domain::Region>, std::shared_ptr<parameters::Parameters> options, std::vector<FieldDescription> fields,
                           std::vector<std::shared_ptr<processes::Process>> processes, std::shared_ptr<initializers::Initializer> initializer,
-                          std::vector<std::shared_ptr<mathFunctions::FieldFunction>> fieldInitialization, std::vector<std::shared_ptr<mathFunctions::FieldFunction>> exactSolutions = {},
-                          const std::vector<std::string>& coupledFields = {});
+                          std::vector<std::shared_ptr<mathFunctions::FieldFunction>> fieldInitialization, PetscReal minimumDiameterIn,
+                          std::vector<std::shared_ptr<mathFunctions::FieldFunction>> exactSolutions = {}, const std::vector<std::string>& coupledFields = {});
 
     /**
      * shared pointer version of the constructor
@@ -47,8 +42,13 @@ class BurningParticleSolver : public CoupledParticleSolver{
      */
     BurningParticleSolver(std::string solverId, std::shared_ptr<domain::Region>, std::shared_ptr<parameters::Parameters> options, const std::vector<std::shared_ptr<FieldDescription>>& fields,
                           std::vector<std::shared_ptr<processes::Process>> processes, std::shared_ptr<initializers::Initializer> initializer,
-                          std::vector<std::shared_ptr<mathFunctions::FieldFunction>> fieldInitialization, std::vector<std::shared_ptr<mathFunctions::FieldFunction>> exactSolutions = {},
-                          const std::vector<std::string>& = {});
+                          std::vector<std::shared_ptr<mathFunctions::FieldFunction>> fieldInitialization, PetscReal minimumDiameterIn,
+                          std::vector<std::shared_ptr<mathFunctions::FieldFunction>> exactSolutions = {}, const std::vector<std::string>& = {});
+
+    /**
+    * Check if the Particle Diameter is small enough not to just assume extinguihsed
+    */
+    inline PetscBool CheckMinimumDiameterLimit(PetscReal particleDiameter) const { return (particleDiameter < minimumDiameter) ? PETSC_TRUE : PETSC_FALSE;}
 
     void DecodeSolverAuxVariables() override;
 

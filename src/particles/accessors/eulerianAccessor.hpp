@@ -7,6 +7,7 @@
 #include "domain/subDomain.hpp"
 #include "particles/field.hpp"
 #include "swarmAccessor.hpp"
+#include "mutableSwarmAccessor.hpp"
 #include "utilities/petscUtilities.hpp"
 
 namespace ablate::particles::accessors {
@@ -28,6 +29,7 @@ class EulerianAccessor : public Accessor<const PetscReal> {
 
    public:
     EulerianAccessor(bool cachePointData, std::shared_ptr<ablate::domain::SubDomain> subDomain, SwarmAccessor&, PetscReal currentTime);
+    EulerianAccessor(bool cachePointData, std::shared_ptr<ablate::domain::SubDomain> subDomain, MutableSwarmAccessor&, PetscReal currentTime);
 
     /**
      * Create point data from the rhs field

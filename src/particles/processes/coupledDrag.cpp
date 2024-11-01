@@ -1,5 +1,5 @@
 #include "coupledDrag.hpp"
-#include "particles/burningParticleSolver.hpp"
+#include "particles/particleSolver.hpp"
 #include "finiteVolume/compressibleFlowFields.hpp"
 #include "eos/transport/transportModel.hpp"
 #include "utilities/constants.hpp"
@@ -19,9 +19,9 @@ void ablate::particles::processes::CoupledDrag::ComputeRHS(PetscReal time, ablat
     //Actual Source terms (Not an analytical solution)
 
     //Parcel/particle Properties
-    auto partVelocity = swarmAccessor[ablate::particles::BurningParticleSolver::ParticleVelocity];
-    auto partDensity = swarmAccessor[ablate::particles::BurningParticleSolver::ParticleDensity];
-    auto avgDiameter = swarmAccessor[ablate::particles::BurningParticleSolver::ParticleDiameter];
+    auto partVelocity = swarmAccessor[ablate::particles::ParticleSolver::ParticleVelocity];
+    auto partDensity = swarmAccessor[ablate::particles::ParticleSolver::ParticleDensity];
+    auto avgDiameter = swarmAccessor[ablate::particles::ParticleSolver::ParticleDiameter];
     const auto Nparticles = swarmAccessor.GetNumberParticles();
 
     //Grab the gas temperature and density
@@ -32,7 +32,7 @@ void ablate::particles::processes::CoupledDrag::ComputeRHS(PetscReal time, ablat
 
 
     //Setup the particle RHS
-    auto particleVelocityRHS = rhsAccessor[ablate::particles::BurningParticleSolver::ParticleVelocity];
+    auto particleVelocityRHS = rhsAccessor[ablate::particles::ParticleSolver::ParticleVelocity];
     auto particleCoordsRHS = rhsAccessor[ablate::particles::ParticleSolver::ParticleCoordinates];
     //declare some variables
     PetscReal gasMu,ReP, Cd, tauRelax, gasDensity, velDiffMag =0;
@@ -69,8 +69,8 @@ void ablate::particles::processes::CoupledDrag::ComputeEulerianSource(PetscReal 
     PetscReal dt = endTime-startTime;
 
     //Grab Next and Old Swarm Temperatures (Assume Cp and mass does not change ever)
-    auto parcelMassNew = swarmAccessorPostStep[ablate::particles::BurningParticleSolver::ParticleMass];
-    auto parcelMassOld = swarmAccessorPreStep[ablate::particles::BurningParticleSolver::ParticleMass];
+    auto parcelMassNew = swarmAccessorPostStep[ablate::particles::ParticleSolver::ParticleMass];
+    auto parcelMassOld = swarmAccessorPreStep[ablate::particles::ParticleSolver::ParticleMass];
     auto particleVelocityOld = swarmAccessorPreStep[ablate::particles::ParticleSolver::ParticleVelocity];
     auto particleVelocityNew = swarmAccessorPostStep[ablate::particles::ParticleSolver::ParticleVelocity];
 
