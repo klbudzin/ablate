@@ -1,9 +1,8 @@
 #ifndef ABLATELIBRARY_TWOZONEBURN_HPP
 #define ABLATELIBRARY_TWOZONEBURN_HPP
-//#include "../burningProcess.hpp"
-//#include "../../particleSolver.hpp"
 #include "particles/processes/burningProcess.hpp"
 #include "particles/particleSolver.hpp"
+
 namespace ablate::particles::processes::burningModel {
 
 

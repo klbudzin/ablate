@@ -1,4 +1,4 @@
-#include "twoZoneBurn.hpp.hpp"
+#include "twoZoneBurn.hpp"
 #include "utilities/constants.hpp"
 
 ablate::particles::processes::burningModel::TwoZoneBurn::TwoZoneBurn(PetscReal convectionCoeff,
@@ -47,7 +47,7 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeRHS(PetscRe
 }
 
 
-void ablate::particles::processes::burningModel::NoEvaporationConstantBurn::ComputeEulerianSource(PetscReal startTime, PetscReal endTime, PetscInt ndims, accessors::SwarmAccessor &swarmAccessorPreStep, accessors::SwarmAccessor &swarmAccessorPostStep, accessors::EulerianSourceAccessor &eulerianSourceAccessor)
+void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeEulerianSource(PetscReal startTime, PetscReal endTime, PetscInt ndims, accessors::SwarmAccessor &swarmAccessorPreStep, accessors::SwarmAccessor &swarmAccessorPostStep, accessors::EulerianSourceAccessor &eulerianSourceAccessor)
 {
     //We need to communicate the energy that was transfer to/from the eulerian field to the particle back to the eulerian field rhoEnergy
     // Get sizes from the accessors
