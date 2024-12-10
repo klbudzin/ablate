@@ -2,6 +2,7 @@
 #define ABLATELIBRARY_TWOZONEBURN_HPP
 #include "particles/processes/burningProcess.hpp"
 #include "particles/particleSolver.hpp"
+#include "eos/eos.hpp"
 
 namespace ablate::particles::processes::burningModel {
 
@@ -11,7 +12,51 @@ class TwoZoneBurn : public ablate::particles::processes::BurningProcess
     public:
     const PetscReal burnRate; //D^2 Law constant K
     const PetscReal convectionCoeff; //simple convection heating mode
-    const PetscReal YiFuel[];
+//    const PetscReal YiFuel[];
+
+//    std::shared_ptr<eos> eos; //TODO convert EOS into zerorkEOS
+
+    struct fuel{
+
+        double rhoSolid = 678;
+        double Tsurf = 364;
+        double latentheat;
+        double heatOfCombustion;
+
+    };
+
+    struct farField{
+
+        double temperature = 350;
+        std::vector<double> Y(int nSpc);
+
+
+
+    };
+
+    struct innerZone{
+        double k;
+        double Cp;
+        double D;
+        double rho;
+        double T;
+        double gamma;
+        double Le;
+        double Lambda;
+
+    };
+
+    struct outerZone{
+        double k;
+        double Cp;
+        double D;
+        double rho;
+        double T;
+        double gamma;
+        double Le;
+        double Lambda;
+    };
+
 
     TwoZoneBurn(PetscReal convectionCoeff, PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx,
                               PetscReal Lv, PetscReal Hc, const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
@@ -41,7 +86,20 @@ class TwoZoneBurn : public ablate::particles::processes::BurningProcess
             IsParticleBurning(farFieldMassFractions(p,oxygenOffset), particleTemperature(p), &burning(p));
         }
      }
+
+    private:
+     void CalcBurnRate();
+
+     double YFs;
+     double MWs;
+     double Ts;
+     double ql;
+     double qlimfac=0.1;
+     int nSpc=10;
+
+
 };
+
 
 
 }

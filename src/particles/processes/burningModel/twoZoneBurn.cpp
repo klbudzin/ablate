@@ -7,7 +7,12 @@ ablate::particles::processes::burningModel::TwoZoneBurn::TwoZoneBurn(PetscReal c
        PetscReal extinguishmentOxygenMassFraction, std::shared_ptr<eos::EOS> eosIn) :
        BurningProcess(std::move(eosIn), {}, massFractionsProducts, ignitionTemperature, nuOx, Lv, heatOfCombustion, extinguishmentOxygenMassFraction),
        burnRate(burnRate), convectionCoeff(convectionCoeff)
-       { }
+       {
+    // TODO Initialize chemistry here
+
+    // TODO evaluate chemical equilibrium here
+
+}
 
 
 void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeRHS(PetscReal time, accessors::SwarmAccessor &swarmAccessor, accessors::RhsAccessor &rhsAccessor, accessors::EulerianAccessor &eulerianAccessor)
@@ -45,7 +50,6 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeRHS(PetscRe
             }
     }
 }
-
 
 void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeEulerianSource(PetscReal startTime, PetscReal endTime, PetscInt ndims, accessors::SwarmAccessor &swarmAccessorPreStep, accessors::SwarmAccessor &swarmAccessorPostStep, accessors::EulerianSourceAccessor &eulerianSourceAccessor)
 {
@@ -89,6 +93,15 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeEulerianSou
         }
     }
 }
+
+
+void CalcBurnRate(ablate::particles::processes::burningModel::TwoZoneBurn::farField FarField, ablate::particles::processes::burningModel::TwoZoneBurn::fuel Fuel){
+    double Yis = 1;
+
+    double rstar = 0;
+}
+
+
 
 
 #include "registrar.hpp"
