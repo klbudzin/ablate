@@ -25,12 +25,6 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     include(CTest)
 endif ()
 
-# Create the library for ablate
-add_library(ablateLibrary SHARED
-        src/particles/processes/burningModel/twoZone.cpp
-        src/particles/processes/burningModel/twoZone.hpp
-        src/particles/processes/burningModel/twoZone.hpp)
-
 # Load in the subdirectories for the ablate library
 add_subdirectory(src)
 

@@ -3,6 +3,8 @@
 #include "particles/processes/burningProcess.hpp"
 #include "particles/particleSolver.hpp"
 #include "eos/eos.hpp"
+#include "particles/processes/burningModel/liquidFuels/liquidFuel.hpp"
+//#include "particles/processes/burningModel/liquidFuels/waxFuel.hpp"
 
 namespace ablate::particles::processes::burningModel {
 
@@ -12,56 +14,72 @@ class TwoZoneBurn : public ablate::particles::processes::BurningProcess
     public:
     const PetscReal burnRate; //D^2 Law constant K
     const PetscReal convectionCoeff; //simple convection heating mode
-//    const PetscReal YiFuel[];
+    const PetscReal YiFuel[];
+
+
 
 //    std::shared_ptr<eos> eos; //TODO convert EOS into zerorkEOS
+    private:
+    std::shared_ptr<ablate::particles::processes::burningModel::LiquidFuel> liquidFuel;
+
 
     struct fuel{
 
         double rhoSolid = 678;
         double Tsurf = 364;
-        double latentheat;
-        double heatOfCombustion;
+        double latentheat=36000;
+        double heatOfCombustion=5000;
+        double MW = 450;
+        double k =12;
 
     };
 
     struct farField{
 
-        double temperature = 350;
+        double Temperature = 350;
+        double Pressure;
         std::vector<double> Y(int nSpc);
-
-
+        double Yox;
 
     };
 
     struct innerZone{
         double k;
         double Cp;
-        double D;
+        double Diff;
         double rho;
         double T;
         double gamma;
         double Le;
         double Lambda;
+        double MdotF_D_Mdot1;
 
     };
 
     struct outerZone{
         double k;
         double Cp;
-        double D;
+        double Diff;
         double rho;
         double T;
         double gamma;
         double Le;
         double Lambda;
+        double MdotOX_D_Mdot2;
     };
 
 
     TwoZoneBurn(PetscReal convectionCoeff, PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx,
                               PetscReal Lv, PetscReal Hc, const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
-                              PetscReal extinguishmentOxygenMassFraction,std::shared_ptr<eos::EOS> eos);
+                              PetscReal extinguishmentOxygenMassFraction,std::shared_ptr<eos::EOS> eos,
+                              const std::string& fuelType);
 
+    void CalcBurnRate();
+
+    void SolveTwoZone(double YFs,ablate::particles::processes::burningModel::TwoZoneBurn::farField farfield,
+                                                                               ablate::particles::processes::burningModel::TwoZoneBurn::fuel fuel,
+                                                                               ablate::particles::processes::burningModel::TwoZoneBurn::innerZone innerzone,
+                                                                               ablate::particles::processes::burningModel::TwoZoneBurn::outerZone outerzone);
 
     /**
      * Overload default calls to be do nothing calls
@@ -88,7 +106,7 @@ class TwoZoneBurn : public ablate::particles::processes::BurningProcess
      }
 
     private:
-     void CalcBurnRate();
+
 
      double YFs;
      double MWs;
@@ -96,6 +114,7 @@ class TwoZoneBurn : public ablate::particles::processes::BurningProcess
      double ql;
      double qlimfac=0.1;
      int nSpc=10;
+     const double Pivalue=3.14159;
 
 
 };

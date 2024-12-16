@@ -1,13 +1,28 @@
 #include "twoZoneBurn.hpp"
 #include "utilities/constants.hpp"
+#include "particles/processes/burningModel/liquidFuels/waxFuel.hpp"
+#include "particles/processes/burningModel/liquidFuels/liquidFuel.hpp"
+#include <math.h>
 
 ablate::particles::processes::burningModel::TwoZoneBurn::TwoZoneBurn(PetscReal convectionCoeff,
        PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx, PetscReal Lv, PetscReal heatOfCombustion,
        const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
-       PetscReal extinguishmentOxygenMassFraction, std::shared_ptr<eos::EOS> eosIn) :
+       PetscReal extinguishmentOxygenMassFraction, std::shared_ptr<eos::EOS> eosIn,
+       const std::string& fuelType) :
        BurningProcess(std::move(eosIn), {}, massFractionsProducts, ignitionTemperature, nuOx, Lv, heatOfCombustion, extinguishmentOxygenMassFraction),
        burnRate(burnRate), convectionCoeff(convectionCoeff)
        {
+
+    //one can easily add more fuels here
+    if (fuelType == "wax") {
+        liquidFuel = std::make_shared<ablate::particles::processes::burningModel::waxFuel>();
+    } else {
+        throw std::invalid_argument("Unknown fuel type: " + fuelType);
+    }
+
+
+
+
     // TODO Initialize chemistry here
 
     // TODO evaluate chemical equilibrium here
@@ -53,6 +68,7 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeRHS(PetscRe
 
 void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeEulerianSource(PetscReal startTime, PetscReal endTime, PetscInt ndims, accessors::SwarmAccessor &swarmAccessorPreStep, accessors::SwarmAccessor &swarmAccessorPostStep, accessors::EulerianSourceAccessor &eulerianSourceAccessor)
 {
+
     //We need to communicate the energy that was transfer to/from the eulerian field to the particle back to the eulerian field rhoEnergy
     // Get sizes from the accessors
     const auto np = swarmAccessorPreStep.GetNumberParticles();
@@ -94,11 +110,54 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeEulerianSou
     }
 }
 
-
-void CalcBurnRate(ablate::particles::processes::burningModel::TwoZoneBurn::farField FarField, ablate::particles::processes::burningModel::TwoZoneBurn::fuel Fuel){
+    void ablate::particles::processes::burningModel::TwoZoneBurn::CalcBurnRate() {
     double Yis = 1;
-
+    double klValue = liquidFuel->fuelProperties.kl;
     double rstar = 0;
+}
+
+
+void ablate::particles::processes::burningModel::TwoZoneBurn::SolveTwoZone(double YFsguess,ablate::particles::processes::burningModel::TwoZoneBurn::farField farfield,
+                  ablate::particles::processes::burningModel::TwoZoneBurn::fuel fuel,
+                  ablate::particles::processes::burningModel::TwoZoneBurn::innerZone innerzone,
+                  ablate::particles::processes::burningModel::TwoZoneBurn::outerZone outerzone){
+
+    double YFs_old = YFsguess;
+
+    double Pvap = YFsguess * farfield.Pressure * Mws / fuel.MW;
+
+
+    //Bound the vapor pressure
+    Pvap = std::min(Pvap,farfield.Pressure);
+    Pvap = std::max(Pvap, 1E-20);
+
+    //calculate the surface temperature
+    double Tsnew = 290;
+    liquidFuel->Tvap(&Tsnew,&Pvap);
+
+    double LHS = log((innerzone.MdotF_D_Mdot1 - YFs) / innerzone.MdotF_D_Mdot1) / log(outerzone.MdotOX_D_Mdot2 / (outerzone.MdotOX_D_Mdot2 - farfield.Yox));
+    double rf_rs = 1 + LHS * innerzone.gamma / outerzone.gamma;
+    double mdot1 = 2 * Pivalue * Dp * innerzone.gamma / (1. - 1. /(rf_rs+1E-20)) * log(innerzone.MdotF_D_Mdot1 / (innerzone.MdotF_D_Mdot1 - YFs));
+    mdot1 = std::max(mdot1, 1E-20); // to prevent non-physical solution associated with negative mass flow.
+
+    //TODO make sure Apl is the area
+    double Qdot_condl = -liquidFuel->fuelProperties.kl * Apl * (Ts - Tp) / (max(0.5*Dp, 1E-20));
+    double Qdot_limiter = abs(qlimfac * mdot1 * fuel.latentheat) / abs(Qdot_condl + 1E-20);
+    Qdot_limiter = std::min(Qdot_limiter,1.e+0);
+    Qdot_condl = Qdot_condl * Qdot_limiter;
+
+    double QdotF_D_Mdot = innerzone.Cp * Ts - fuel.latentheat + Qdot_condl / (mdot1 + 1E-20);
+    double QdotO_D_Mdot = QdotF_D_Mdot + innerzone.MdotF_D_Mdot1 * fuel.heatOfCombustion;
+    double Tf = (outerzone.Cp * farfield.Temperature - QdotO_D_Mdot) * pow(outerzone.MdotOX_D_Mdot2 / (outerzone.MdotOX_D_Mdot2 - farfield.Yox), 1 / outerzone.Le);
+    Tf = (QdotO_D_Mdot + Tf) /outerzone.Cp;
+    Ts = (QdotF_D_Mdot + (innerzone.Cp * Tf - QdotF_D_Mdot) * exp(-mdot1 * innerzone.Cp * (1. - 1. / rf_rs) / (2. * Pivalue * Dp * innerzone.k))) / innerzone.Cp;
+
+    // Recomputing Yfs using Tf and stepping from flame to surface using YFs-T relation.
+    QdotF_D_Mdot = innerzone.Cp * Ts - fuel.latentheat + Qdot_condl / (mdot1 + 1E-20);
+    double YFs_new = innerzone.MdotF_D_Mdot1*(1.- pow((innerzone.Cp * Ts - QdotF_D_Mdot) / (innerzone.Cp * Tf - QdotF_D_Mdot),innerzone.Le));
+
+    YFs_new = std::min(YFs_new, 1.);
+    YFs_new = std::max(YFs_new, 0.);
 }
 
 
@@ -113,5 +172,6 @@ REGISTER(ablate::particles::processes::Process, ablate::particles::processes::bu
          OPT(PetscReal, "Lv", "LatentHeat of Vaporization (defaults to 1e5)"),
          OPT(PetscReal, "Hc", "heat of combustion per unit mass of fuel (defaults to 1e6"),
          ARG(ablate::mathFunctions::FieldFunction, "productsMassFractions", "The product species functions"),
+         ARG(std::string, "fuelType", "The type of liquid fuel, curently implmented: 'wax'"),
          OPT(PetscReal, "extinguishmentOxygenMassFraction", "The minimum oxygen mass fraction needed for burning (defaults to 0.1)"),
          ARG(ablate::eos::EOS, "eos", "the eos used to compute various gas properties") );
