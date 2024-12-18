@@ -3,6 +3,7 @@
 #include "particles/processes/burningProcess.hpp"
 #include "particles/particleSolver.hpp"
 #include "eos/eos.hpp"
+#include "eos/zerork.hpp"
 #include "particles/processes/burningModel/liquidFuels/liquidFuel.hpp"
 //#include "particles/processes/burningModel/liquidFuels/waxFuel.hpp"
 
@@ -18,30 +19,24 @@ class TwoZoneBurn : public ablate::particles::processes::BurningProcess
 
 
 
-//    std::shared_ptr<eos> eos; //TODO convert EOS into zerorkEOS
+//    std::shared_ptr<eos::EOS> eos;
     private:
     std::shared_ptr<ablate::particles::processes::burningModel::LiquidFuel> liquidFuel;
 
 
-    struct fuel{
 
-        double rhoSolid = 678;
-        double Tsurf = 364;
-        double latentheat=36000;
-        double heatOfCombustion=5000;
-        double MW = 450;
-        double k =12;
 
-    };
+    struct farFieldProp{
 
-    struct farField{
-
-        double Temperature = 350;
-        double Pressure;
-        std::vector<double> Y(int nSpc);
-        double Yox;
+        double Temperature;
+        double Pressure = 101325;
+        //TODO could set up later to include a vector for chemical equilibrium...
+//        std::vector<double> Y(int nSpc);
+        double Yox = 1;
 
     };
+
+    farFieldProp farField;
 
     struct innerZone{
         double k;
@@ -71,15 +66,22 @@ class TwoZoneBurn : public ablate::particles::processes::BurningProcess
 
     TwoZoneBurn(PetscReal convectionCoeff, PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx,
                               PetscReal Lv, PetscReal Hc, const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
-                              PetscReal extinguishmentOxygenMassFraction,std::shared_ptr<eos::EOS> eos,
+                              PetscReal extinguishmentOxygenMassFraction,std::shared_ptr<eos::zerorkEOS> eos,
                               const std::string& fuelType);
 
     void CalcBurnRate();
 
-    void SolveTwoZone(double YFs,ablate::particles::processes::burningModel::TwoZoneBurn::farField farfield,
-                                                                               ablate::particles::processes::burningModel::TwoZoneBurn::fuel fuel,
+    void SolveTwoZone(double YFs,ablate::particles::processes::burningModel::TwoZoneBurn::farFieldProp farfield,
                                                                                ablate::particles::processes::burningModel::TwoZoneBurn::innerZone innerzone,
                                                                                ablate::particles::processes::burningModel::TwoZoneBurn::outerZone outerzone);
+
+    void UpdateZones(ablate::particles::processes::burningModel::TwoZoneBurn::farFieldProp* farfield,
+                      ablate::particles::processes::burningModel::TwoZoneBurn::innerZone* innerzone,
+                      ablate::particles::processes::burningModel::TwoZoneBurn::outerZone* outerzone);
+
+    void UpdateFarfield(farFieldProp* FarField,double T, double P, double YiO2);
+
+    void TwozoneFlame();
 
     /**
      * Overload default calls to be do nothing calls
@@ -100,6 +102,7 @@ class TwoZoneBurn : public ablate::particles::processes::BurningProcess
         auto burning = mA[ablate::particles::ParticleSolver::ParticleBurning];
         auto farFieldMassFractions = eA[ablate::finiteVolume::CompressibleFlowFields::YI_FIELD];
         auto particleTemperature = mA[ablate::particles::ParticleSolver::ParticleTemperature];
+
         for (PetscInt p = 0; p < numParticles; p++){
             IsParticleBurning(farFieldMassFractions(p,oxygenOffset), particleTemperature(p), &burning(p));
         }
@@ -107,14 +110,24 @@ class TwoZoneBurn : public ablate::particles::processes::BurningProcess
 
     private:
 
-
+     double nSpec;
      double YFs;
-     double MWs;
+     double MWair = 28.96;
+     double Dp;
      double Ts;
      double ql;
      double qlimfac=0.1;
      int nSpc=10;
      const double Pivalue=3.14159;
+
+     struct results{
+         double F;
+         double Yfs_new;
+         double Ts;
+         double mdot1;
+         double rstar;
+         double Tf;
+     };
 
 
 };

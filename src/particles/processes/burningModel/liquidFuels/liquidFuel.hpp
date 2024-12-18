@@ -28,7 +28,7 @@ class LiquidFuel {
     };
 
     const std::string fuelname;                       // Name of the fuel
-    const fuelPropeties fuelProperties;              // Fuel properties
+//    const fuelPropeties fuelProperties;              // Fuel properties
 //    const AntoineConstants AntoineConstants;         // Antoine constants
 
 

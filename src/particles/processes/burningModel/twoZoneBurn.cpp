@@ -7,11 +7,15 @@
 ablate::particles::processes::burningModel::TwoZoneBurn::TwoZoneBurn(PetscReal convectionCoeff,
        PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx, PetscReal Lv, PetscReal heatOfCombustion,
        const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
-       PetscReal extinguishmentOxygenMassFraction, std::shared_ptr<eos::EOS> eosIn,
+       PetscReal extinguishmentOxygenMassFraction, std::shared_ptr<eos::zerorkEOS> eosIn,
        const std::string& fuelType) :
        BurningProcess(std::move(eosIn), {}, massFractionsProducts, ignitionTemperature, nuOx, Lv, heatOfCombustion, extinguishmentOxygenMassFraction),
        burnRate(burnRate), convectionCoeff(convectionCoeff)
        {
+
+    if (!std::dynamic_pointer_cast<eos::zerorkEOS>(eosIn)) {
+        throw std::invalid_argument("the twozone model only accepts eos::zerorkEOS as the input sorry in advance, Kolos<3");
+    }
 
     //one can easily add more fuels here
     if (fuelType == "wax") {
@@ -20,10 +24,17 @@ ablate::particles::processes::burningModel::TwoZoneBurn::TwoZoneBurn(PetscReal c
         throw std::invalid_argument("Unknown fuel type: " + fuelType);
     }
 
+    // make sure that the eos is set
+    if (!std::dynamic_pointer_cast<eos::zerorkEOS>(eosIn)) {
+        throw std::invalid_argument("ablate::finiteVolume::processes::Soot only accepts EOS of type eos::chemistrymodel::zerorkEOS");
+    }
 
+    nSpc=eosIn->mech->getNumSpecies();
 
-
-    // TODO Initialize chemistry here
+    //initialize farfield
+    farField.Temperature = 350.0;
+    farField.Pressure = 101325.0;
+    farField.Yox = 1.0;
 
     // TODO evaluate chemical equilibrium here
 
@@ -56,6 +67,7 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeRHS(PetscRe
     for( auto np = 0; np < numParticles; np++) {
         //Ideally this is a farField Value, but for this test case I'm not letting the particles burn until the particle itself reaches
         // the ignition temperature, Particle may be burning now then when it was updated in the decode call, this will be called twice
+        CalcBurnRate();
         if (partBurning(np))
             massRHS(np) -= particlesPerParcel(np)*(partDensity(np)*PETSC_PI/4*partDiameterAvg(np)*burnRate);
         //If it's not burning, we are just heating with our shitty convection model
@@ -111,20 +123,54 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeEulerianSou
 }
 
     void ablate::particles::processes::burningModel::TwoZoneBurn::CalcBurnRate() {
-    double Yis = 1;
-    double klValue = liquidFuel->fuelProperties.kl;
-    double rstar = 0;
+
+    //Calculate the combustion, either implement equlibrium or just simple flamelet
+//    TwozoneEqulibrium();
+
+    double Tfar=0;
+    double Pfar = 0;
+    double YiO2 = 1;
+
+    //Update the farfield stat, T, Yox,
+    UpdateFarfield(&farField, Tfar,Pfar,YiO2);
+
+    //Update the zone properties
+    UpdateZones();
+
+    //TODO implement itteration here for now just YFs=1, boiling
+    SolveTwoZone(1.0, farField);
+
+    //Calculate burnrate, Energy source,
+    burnRate = 1E-7;
+}
+
+void ablate::particles::processes::burningModel::TwoZoneBurn::UpdateFarfield(ablate::particles::processes::burningModel::TwoZoneBurn::farFieldProp* farfield,double Tfar, double Pfar, double YiO2far) {
+
+    farfield->Temperature=Tfar;
+    farfield->Pressure=Pfar;
+    farfield->Yox=YiO2far;
+
+};
+
+void ablate::particles::processes::burningModel::TwoZoneBurn::UpdateZones(ablate::particles::processes::burningModel::TwoZoneBurn::farFieldProp *farfield, ablate::particles::processes::burningModel::TwoZoneBurn::innerZone *innerzone, ablate::particles::processes::burningModel::TwoZoneBurn::outerZone *outerzone) {
+
+
 }
 
 
-void ablate::particles::processes::burningModel::TwoZoneBurn::SolveTwoZone(double YFsguess,ablate::particles::processes::burningModel::TwoZoneBurn::farField farfield,
-                  ablate::particles::processes::burningModel::TwoZoneBurn::fuel fuel,
+void ablate::particles::processes::burningModel::TwoZoneBurn::TwozoneFlame() {
+
+
+}
+
+
+void ablate::particles::processes::burningModel::TwoZoneBurn::SolveTwoZone(double YFsguess,ablate::particles::processes::burningModel::TwoZoneBurn::farFieldProp farfield,
                   ablate::particles::processes::burningModel::TwoZoneBurn::innerZone innerzone,
                   ablate::particles::processes::burningModel::TwoZoneBurn::outerZone outerzone){
 
     double YFs_old = YFsguess;
-
-    double Pvap = YFsguess * farfield.Pressure * Mws / fuel.MW;
+    double MWs = 1/(YFsguess/liquidFuel->fuelProperties.MW + (1-YFsguess)/MWair);
+    double Pvap = YFsguess * farfield.Pressure * MWs / liquidFuel->fuelProperties.MW;
 
 
     //Bound the vapor pressure
@@ -141,23 +187,25 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::SolveTwoZone(doubl
     mdot1 = std::max(mdot1, 1E-20); // to prevent non-physical solution associated with negative mass flow.
 
     //TODO make sure Apl is the area
-    double Qdot_condl = -liquidFuel->fuelProperties.kl * Apl * (Ts - Tp) / (max(0.5*Dp, 1E-20));
-    double Qdot_limiter = abs(qlimfac * mdot1 * fuel.latentheat) / abs(Qdot_condl + 1E-20);
+    double Qdot_condl = -liquidFuel->fuelProperties.kl * (Dp* Dp * Pivalue) * (Ts - Tp) / (max(0.5*Dp, 1E-20));
+    double Qdot_limiter = abs(qlimfac * mdot1 * liquidFuel->fuelProperties.Hvap) / abs(Qdot_condl + 1E-20);
     Qdot_limiter = std::min(Qdot_limiter,1.e+0);
     Qdot_condl = Qdot_condl * Qdot_limiter;
 
-    double QdotF_D_Mdot = innerzone.Cp * Ts - fuel.latentheat + Qdot_condl / (mdot1 + 1E-20);
-    double QdotO_D_Mdot = QdotF_D_Mdot + innerzone.MdotF_D_Mdot1 * fuel.heatOfCombustion;
+    double QdotF_D_Mdot = innerzone.Cp * Ts - liquidFuel->fuelProperties.Hvap + Qdot_condl / (mdot1 + 1E-20);
+    double QdotO_D_Mdot = QdotF_D_Mdot + innerzone.MdotF_D_Mdot1 * liquidFuel->fuelProperties.Hc;
     double Tf = (outerzone.Cp * farfield.Temperature - QdotO_D_Mdot) * pow(outerzone.MdotOX_D_Mdot2 / (outerzone.MdotOX_D_Mdot2 - farfield.Yox), 1 / outerzone.Le);
     Tf = (QdotO_D_Mdot + Tf) /outerzone.Cp;
     Ts = (QdotF_D_Mdot + (innerzone.Cp * Tf - QdotF_D_Mdot) * exp(-mdot1 * innerzone.Cp * (1. - 1. / rf_rs) / (2. * Pivalue * Dp * innerzone.k))) / innerzone.Cp;
 
     // Recomputing Yfs using Tf and stepping from flame to surface using YFs-T relation.
-    QdotF_D_Mdot = innerzone.Cp * Ts - fuel.latentheat + Qdot_condl / (mdot1 + 1E-20);
+    QdotF_D_Mdot = innerzone.Cp * Ts - liquidFuel->fuelProperties.Hvap + Qdot_condl / (mdot1 + 1E-20);
     double YFs_new = innerzone.MdotF_D_Mdot1*(1.- pow((innerzone.Cp * Ts - QdotF_D_Mdot) / (innerzone.Cp * Tf - QdotF_D_Mdot),innerzone.Le));
 
     YFs_new = std::min(YFs_new, 1.);
     YFs_new = std::max(YFs_new, 0.);
+
+
 }
 
 
