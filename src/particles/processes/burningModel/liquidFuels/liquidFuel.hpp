@@ -19,6 +19,7 @@ class LiquidFuel {
     double MW;
     double rhol;
     double kl;
+    double Cp;
     };
 
     struct AntoineConstants{
@@ -28,7 +29,7 @@ class LiquidFuel {
     };
 
     const std::string fuelname;                       // Name of the fuel
-//    const fuelPropeties fuelProperties;              // Fuel properties
+    virtual fuelPropeties fuelProperties;              // Fuel properties
 //    const AntoineConstants AntoineConstants;         // Antoine constants
 
 

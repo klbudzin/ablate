@@ -11,14 +11,25 @@ class waxFlame : public ablate::particles::processes::burningModel::CxHyOzFlame{
     // Constructor with initializer list
     waxFlame()     // Initialize Antoine constants (A, B, C)
     {
-        nuC32H66=1;
-        nuCO2=1;
-        nuH2O=1;
-        nuO2=1;
+        x=31;
+        y=64;
+        z=0;
 
+
+        double YO2_inf=0.23;
+
+        nuO2 = (x+y/4.-z/2.)*MWO2/MWFuel;
+        nuCO2 = x*MWCO2/MWFuel;
+        nuH2O = 0.5*y*MWH2O/MWFuel;
+
+
+        //TODO calculate these properties with Canetra for wax
+        //Adiabatic Flame temperature
         Tad=2700;
-
+        //Heat of combustion
         Hc=42E6;
+
+
     }
 
     public:

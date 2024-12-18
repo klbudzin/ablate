@@ -9,9 +9,12 @@ class waxFuel : public ablate::particles::processes::burningModel::LiquidFuel{
 
    public:
     // Constructor with initializer list
-    waxFuel() : fuelProperties{ 0.33E6, 42E6,450, 800, 0.12},  // Fuel properties (Hvap, Hc, MW, rhol, kl)
+    waxFuel() : fuelProperties{ 0.33E6, 41.1E6,450, 800, 0.12,3330},  // Fuel properties (Hvap, Hc, MW, rhol, kl, Cp)
           AntoineConstants{7.1356, 2276.9, 75.9}       // Initialize Antoine constants (A, B, C)
     {}
+    // Fuel properties are consistent with simit
+    // Cp evaluated at 1000K from simit
+
 
     public:
 

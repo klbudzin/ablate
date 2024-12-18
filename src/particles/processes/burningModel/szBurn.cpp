@@ -1,10 +1,11 @@
-#include "twoZoneBurn.hpp"
+#include "szBurn.hpp"
 #include "utilities/constants.hpp"
 #include "particles/processes/burningModel/liquidFuels/waxFuel.hpp"
-#include "particles/processes/burningModel/liquidFuels/liquidFuel.hpp"
+#include "particles/processes/burningModel/dropletFlame/waxFlame.hpp"
+//#include "particles/processes/burningModel/liquidFuels/liquidFuel.hpp"
 #include <math.h>
 
-ablate::particles::processes::burningModel::TwoZoneBurn::TwoZoneBurn(PetscReal convectionCoeff,
+ablate::particles::processes::burningModel::SZBurn::SZBurn(PetscReal convectionCoeff,
        PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx, PetscReal Lv, PetscReal heatOfCombustion,
        const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
        PetscReal extinguishmentOxygenMassFraction, std::shared_ptr<eos::zerorkEOS> eosIn,
@@ -13,16 +14,11 @@ ablate::particles::processes::burningModel::TwoZoneBurn::TwoZoneBurn(PetscReal c
        burnRate(burnRate), convectionCoeff(convectionCoeff)
        {
 
-    if (!std::dynamic_pointer_cast<eos::zerorkEOS>(eosIn)) {
-        throw std::invalid_argument("the twozone model only accepts eos::zerorkEOS as the input sorry in advance, Kolos<3");
-    }
-//
-//    //Cast eosIn into eos
-//    eos = dynamic_pointer_cast<eos::zerorkEOS>(eosIn);
 
     //one can easily add more fuels here
     if (fuelType == "wax") {
         liquidFuel = std::make_shared<ablate::particles::processes::burningModel::waxFuel>();
+        flame = std::make_shared<ablate::particles::processes::burningModel::waxFlame>();
     } else {
         throw std::invalid_argument("Unknown fuel type: " + fuelType);
     }
@@ -41,7 +37,7 @@ ablate::particles::processes::burningModel::TwoZoneBurn::TwoZoneBurn(PetscReal c
 }
 
 
-void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeRHS(PetscReal time, accessors::SwarmAccessor &swarmAccessor, accessors::RhsAccessor &rhsAccessor, accessors::EulerianAccessor &eulerianAccessor)
+void ablate::particles::processes::burningModel::SZBurn::ComputeRHS(PetscReal time, accessors::SwarmAccessor &swarmAccessor, accessors::RhsAccessor &rhsAccessor, accessors::EulerianAccessor &eulerianAccessor)
 {
     //Grab wanted fields from the eulerian field accessor
     //In this case we only need the Oxygen and temperature fields
@@ -78,7 +74,7 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeRHS(PetscRe
     }
 }
 
-void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeEulerianSource(PetscReal startTime, PetscReal endTime, PetscInt ndims, accessors::SwarmAccessor &swarmAccessorPreStep, accessors::SwarmAccessor &swarmAccessorPostStep, accessors::EulerianSourceAccessor &eulerianSourceAccessor)
+void ablate::particles::processes::burningModel::SZBurn::ComputeEulerianSource(PetscReal startTime, PetscReal endTime, PetscInt ndims, accessors::SwarmAccessor &swarmAccessorPreStep, accessors::SwarmAccessor &swarmAccessorPostStep, accessors::EulerianSourceAccessor &eulerianSourceAccessor)
 {
 
     //We need to communicate the energy that was transfer to/from the eulerian field to the particle back to the eulerian field rhoEnergy
@@ -97,7 +93,7 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeEulerianSou
     auto parcelBurning = swarmAccessorPostStep[ablate::particles::ParticleSolver::ParticleBurning];
 
     auto parcelCp = swarmAccessorPostStep[ablate::particles::ParticleSolver::ParticleCP];
-    PetscReal mdot;
+    PetscReal mdot=mDot;
     //Product Species will be the same for all particles so calculate them here
     //The below should work since the function should be a constant function and not dependent on space or time
 
@@ -132,10 +128,9 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeEulerianSou
     }
 }
 
-    void ablate::particles::processes::burningModel::TwoZoneBurn::CalcBurnRate() {
+    void ablate::particles::processes::burningModel::SZBurn::CalcBurnRate() {
 
-    //Calculate the combustion, either implement equlibrium or just simple flamelet
-//    TwozoneEqulibrium();
+
 
     //TODO get these from the function
     double Tfar=0;
@@ -143,73 +138,25 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::ComputeEulerianSou
     double YiO2 = 1;
 
 
-
-    //Update the zone properties
-    UpdateZoneProperties();
-
-    //TODO implement itteration here for now just YFs=1, boiling
-    SolveTwoZone(1.0, farField);
-
     //Calculate burnrate, Energy source,
-    burnRate = 1E-7;
+    K = 1E-7;
 }
 
-void ablate::particles::processes::burningModel::TwoZoneBurn::UpdateFarfield(ablate::particles::processes::burningModel::TwoZoneBurn::farFieldProp* farfield,double Tfar, double Pfar, double YiO2far) {
-
+void ablate::particles::processes::burningModel::SZBurn::UpdateFarfield(ablate::particles::processes::burningModel::SZBurn::farFieldProp* farfield,
+                                                                        double Tfar, double Pfar, double YiO2far) {
+    //Update properties
     farfield->Temperature=Tfar;
     farfield->Pressure=Pfar;
     farfield->Yox=YiO2far;
 
+    double nN2dnO2=((1-YiO2far)*28)/(YiO2far*32);
+
+    //rox = (x+y/4)*(MWO2+3.76*MWN2)/MWF
+    farfield->rox = (flame->x+flame->y/4)*(flame->MWO2+nN2dnO2*flame->MWN2)/flame->MWFuel;
 };
 
 
-void ablate::particles::processes::burningModel::TwoZoneBurn::UpdateZoneProperties(ablate::particles::processes::burningModel::TwoZoneBurn::farFieldProp *farfield,
-                                                                          ablate::particles::processes::burningModel::TwoZoneBurn::innerZone *innerzone,
-                                                                          ablate::particles::processes::burningModel::TwoZoneBurn::outerZone *outerzone) {
-
-    innerzone->T=(Ts+flame->Tad)/2;
-    innerzone->Le=1;
-    innerzone->MdotF_D_Mdot1=1; //all other species are 0 except fuel
-
-    // First we need to get the mass fractions at the flame
-    // I am assuming per simit that the mass fraction of the fuel at the surface is 1
-
-
-
-
-    double Cp1;
-    double k1;
-    double D1;
-
-
-    innerzone->Cp
-
-
-}
-
-
-void ablate::particles::processes::burningModel::TwoZoneBurn::TwozoneFlame() {
-
-
-}
-
-
-void ablate::particles::processes::burningModel::TwoZoneBurn::TwoZoneTransport(double* temperature,double* density,double* Yi[],double* Cp,double* k,double* diffusivity){
-
-    *density=eos->mech->getDensityFromTPY(&temperature, &farField.Pressure,&y[]) const;
-    double mu = TransportConst.muo * PetscSqrtReal(*temperature / TransportConst.to) * (*temperature / TransportConst.to) * (TransportConst.to + TransportConst.so) / (*temperature + TransportConst.so);
-    *diffusivity = mu / *density / TransportConst.sc;
-
-    *Cp = eos->mech->getMassCpFromTY();
-    *k = mu * *Cp / TransportConst.pr;
-
-
-};
-
-
-void ablate::particles::processes::burningModel::TwoZoneBurn::SolveTwoZone(double YFsguess,ablate::particles::processes::burningModel::TwoZoneBurn::farFieldProp farfield,
-                  ablate::particles::processes::burningModel::TwoZoneBurn::innerZone innerzone,
-                  ablate::particles::processes::burningModel::TwoZoneBurn::outerZone outerzone){
+void ablate::particles::processes::burningModel::SZBurn::SolveSZBurn(double YFsguess,double YFsnew,ablate::particles::processes::burningModel::SZBurn::farFieldProp farfield){
 
     double YFs_old = YFsguess;
     double MWs = 1/(YFsguess/liquidFuel->fuelProperties.MW + (1-YFsguess)/MWair);
@@ -220,30 +167,19 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::SolveTwoZone(doubl
     Pvap = std::min(Pvap,farfield.Pressure);
     Pvap = std::max(Pvap, 1E-20);
 
+
+
+
     //calculate the surface temperature
     double Tsnew = 290;
     liquidFuel->Tvap(&Tsnew,&Pvap);
 
-    double LHS = log((innerzone.MdotF_D_Mdot1 - YFs) / innerzone.MdotF_D_Mdot1) / log(outerzone.MdotOX_D_Mdot2 / (outerzone.MdotOX_D_Mdot2 - farfield.Yox));
-    double rf_rs = 1 + LHS * innerzone.gamma / outerzone.gamma;
-    double mdot1 = 2 * Pivalue * Dp * innerzone.gamma / (1. - 1. /(rf_rs+1E-20)) * log(innerzone.MdotF_D_Mdot1 / (innerzone.MdotF_D_Mdot1 - YFs));
-    mdot1 = std::max(mdot1, 1E-20); // to prevent non-physical solution associated with negative mass flow.
+    ql=0; //TODO implement a model for heat transfer into surface
+    mDot =0; // TODO Need this to calculate heatflux
 
-    //TODO make sure Apl is the area
-    double Qdot_condl = -liquidFuel->fuelProperties.kl * (Dp* Dp * Pivalue) * (Ts - Tp) / (max(0.5*Dp, 1E-20));
-    double Qdot_limiter = abs(qlimfac * mdot1 * liquidFuel->fuelProperties.Hvap) / abs(Qdot_condl + 1E-20);
-    Qdot_limiter = std::min(Qdot_limiter,1.e+0);
-    Qdot_condl = Qdot_condl * Qdot_limiter;
+    double BoxT = (farfield.Yox*flame->Hc/farfield.rox+liquidFuel->fuelProperties.Cp*(farfield.Temperature-Ts))/liquidFuel->fuelProperties.Hvap;
 
-    double QdotF_D_Mdot = innerzone.Cp * Ts - liquidFuel->fuelProperties.Hvap + Qdot_condl / (mdot1 + 1E-20);
-    double QdotO_D_Mdot = QdotF_D_Mdot + innerzone.MdotF_D_Mdot1 * liquidFuel->fuelProperties.Hc;
-    double Tf = (outerzone.Cp * farfield.Temperature - QdotO_D_Mdot) * pow(outerzone.MdotOX_D_Mdot2 / (outerzone.MdotOX_D_Mdot2 - farfield.Yox), 1 / outerzone.Le);
-    Tf = (QdotO_D_Mdot + Tf) /outerzone.Cp;
-    Ts = (QdotF_D_Mdot + (innerzone.Cp * Tf - QdotF_D_Mdot) * exp(-mdot1 * innerzone.Cp * (1. - 1. / rf_rs) / (2. * Pivalue * Dp * innerzone.k))) / innerzone.Cp;
-
-    // Recomputing Yfs using Tf and stepping from flame to surface using YFs-T relation.
-    QdotF_D_Mdot = innerzone.Cp * Ts - liquidFuel->fuelProperties.Hvap + Qdot_condl / (mdot1 + 1E-20);
-    double YFs_new = innerzone.MdotF_D_Mdot1*(1.- pow((innerzone.Cp * Ts - QdotF_D_Mdot) / (innerzone.Cp * Tf - QdotF_D_Mdot),innerzone.Le));
+    double YFs_new = BoxT/(1+BoxT);
 
     YFs_new = std::min(YFs_new, 1.);
     YFs_new = std::max(YFs_new, 0.);
@@ -255,7 +191,7 @@ void ablate::particles::processes::burningModel::TwoZoneBurn::SolveTwoZone(doubl
 
 
 #include "registrar.hpp"
-REGISTER(ablate::particles::processes::Process, ablate::particles::processes::burningModel::TwoZoneBurn, "Example of an no evaporation/Burning Model",
+REGISTER(ablate::particles::processes::Process, ablate::particles::processes::burningModel::SZBurn, "Example of an no evaporation/Burning Model",
          ARG(PetscReal, "convectionCoefficient", "The convection Coefficient for the simple heating mode"),
          OPT(PetscReal, "IgnitionTemperature", "The temperature of the far field where it is said to *ignite*"),
          OPT(PetscReal, "burnRate", "The constant burning rate K for the d^2 law (defaults to 0)"),

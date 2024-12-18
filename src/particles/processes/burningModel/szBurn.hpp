@@ -1,17 +1,17 @@
-#ifndef ABLATELIBRARY_TWOZONEBURN_HPP
-#define ABLATELIBRARY_TWOZONEBURN_HPP
+#ifndef ABLATELIBRARY_SZBURN_HPP
+#define ABLATELIBRARY_SZBURN_HPP
 #include "particles/processes/burningProcess.hpp"
 #include "particles/particleSolver.hpp"
 #include "eos/eos.hpp"
 #include "eos/zerork.hpp"
 #include "particles/processes/burningModel/liquidFuels/liquidFuel.hpp"
 #include "particles/processes/burningModel/dropletFlame/cxhyozFlame.hpp"
-//#include "particles/processes/burningModel/liquidFuels/waxFuel.hpp"
+
 
 namespace ablate::particles::processes::burningModel {
 
 
-class TwoZoneBurn : public ablate::particles::processes::BurningProcess
+class SZBurn : public ablate::particles::processes::BurningProcess
 {
     public:
     const PetscReal burnRate; //D^2 Law constant K
@@ -29,7 +29,7 @@ class TwoZoneBurn : public ablate::particles::processes::BurningProcess
 
 
     struct farFieldProp{
-
+        double rox;
         double Temperature;
         double Pressure = 101325;
         //TODO could set up later to include a vector for chemical equilibrium...
@@ -66,24 +66,20 @@ class TwoZoneBurn : public ablate::particles::processes::BurningProcess
     };
 
 
-    TwoZoneBurn(PetscReal convectionCoeff, PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx,
+    SZBurn(PetscReal convectionCoeff, PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx,
                               PetscReal Lv, PetscReal Hc, const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
                               PetscReal extinguishmentOxygenMassFraction,std::shared_ptr<eos::zerorkEOS> eos,
                               const std::string& fuelType);
 
     void CalcBurnRate();
 
-    void SolveTwoZone(double YFs,ablate::particles::processes::burningModel::TwoZoneBurn::farFieldProp farfield,
-                                                                               ablate::particles::processes::burningModel::TwoZoneBurn::innerZone innerzone,
-                                                                               ablate::particles::processes::burningModel::TwoZoneBurn::outerZone outerzone);
+    void SolveSZBurn(double YFs,ablate::particles::processes::burningModel::SZBurn::farFieldProp farfield);
 
-    void UpdateZoneProperties(ablate::particles::processes::burningModel::TwoZoneBurn::farFieldProp* farfield,
-                      ablate::particles::processes::burningModel::TwoZoneBurn::innerZone* innerzone,
-                      ablate::particles::processes::burningModel::TwoZoneBurn::outerZone* outerzone);
+    void UpdateZoneProperties(ablate::particles::processes::burningModel::SZBurn::farFieldProp* farfield,
+                      ablate::particles::processes::burningModel::SZBurn::innerZone* innerzone,
+                      ablate::particles::processes::burningModel::SZBurn::outerZone* outerzone);
 
     void UpdateFarfield(farFieldProp* FarField,double T, double P, double YiO2);
-
-    void TwozoneFlame();
 
     void TwoZoneTransport(double* T,double* density,double* Yi[],double* Cp,double* k,double* D);
 
@@ -121,6 +117,8 @@ class TwoZoneBurn : public ablate::particles::processes::BurningProcess
      double Dp;
      double Ts;
      double ql;
+     double mDot;
+     double K;
      double qlimfac=0.1;
      int nSpc=10;
      const double Pivalue=3.14159;
@@ -150,4 +148,4 @@ class TwoZoneBurn : public ablate::particles::processes::BurningProcess
 
 
 }
-#endif //ABLATELIBRARY_TWOZONEBURN_HPP
+#endif //ABLATELIBRARY_SZBURN_HPP
