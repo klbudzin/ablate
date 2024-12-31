@@ -110,6 +110,9 @@ void ablate::particles::processes::burningModel::SZBurn::ComputeEulerianSource(P
 
 
         if (parcelBurning(p)) {
+            //Calculate the droplet burn rate
+
+
             // Start by adding in the mass source terms
             mdot = parcelMassOld(p)-parcelMassNew(p); //mass going into farfield
             sourceEuler(p,ablate::finiteVolume::CompressibleFlowFields::RHO) += mdot;
@@ -130,12 +133,19 @@ void ablate::particles::processes::burningModel::SZBurn::ComputeEulerianSource(P
 
     void ablate::particles::processes::burningModel::SZBurn::CalcBurnRate() {
 
+        double Yguess=1;
 
+        //The results vector includes
+        // 0 ->Ynew
+        // 1 -> Box-T
+        std::vector<double> res(2);
 
-    //TODO get these from the function
-    double Tfar=0;
-    double Pfar = 0;
-    double YiO2 = 1;
+        SolveSZBurn(&Yguess,&res,farField);
+
+        //Calculate burn rate and mass loss rate from the transfer number
+        mdot = 4.*np.pi*ro*(kg/Cpg)*np.log(1+BoxT);
+        K = 8*(kg/Cpg/rhol)*np.log(1+BoxT);
+
 
 
     //Calculate burnrate, Energy source,
@@ -156,18 +166,16 @@ void ablate::particles::processes::burningModel::SZBurn::UpdateFarfield(ablate::
 };
 
 
-void ablate::particles::processes::burningModel::SZBurn::SolveSZBurn(double YFsguess,double YFsnew,ablate::particles::processes::burningModel::SZBurn::farFieldProp farfield){
+void ablate::particles::processes::burningModel::SZBurn::SolveSZBurn(double* YFsguess,std::vector<double>* res,ablate::particles::processes::burningModel::SZBurn::farFieldProp farfield){
 
-    double YFs_old = YFsguess;
-    double MWs = 1/(YFsguess/liquidFuel->fuelProperties.MW + (1-YFsguess)/MWair);
-    double Pvap = YFsguess * farfield.Pressure * MWs / liquidFuel->fuelProperties.MW;
+    double YFs_old = *YFsguess;
+    double MWs = 1/(YFs_old/liquidFuel->fuelProperties.MW + (1-YFs_old)/MWair);
+    double Pvap = YFs_old * farfield.Pressure * MWs / liquidFuel->fuelProperties.MW;
 
 
     //Bound the vapor pressure
     Pvap = std::min(Pvap,farfield.Pressure);
     Pvap = std::max(Pvap, 1E-20);
-
-
 
 
     //calculate the surface temperature
@@ -184,6 +192,9 @@ void ablate::particles::processes::burningModel::SZBurn::SolveSZBurn(double YFsg
     YFs_new = std::min(YFs_new, 1.);
     YFs_new = std::max(YFs_new, 0.);
 
+    //TODO figure out how to set the elements of the pointer
+    res[0].assign(0,YFs_new);
+    res[1].assign(YFs_new);
 
 }
 

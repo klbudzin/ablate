@@ -40,31 +40,6 @@ class SZBurn : public ablate::particles::processes::BurningProcess
 
     farFieldProp farField;
 
-    struct innerZone{
-        double k;
-        double Cp;
-        double Diff;
-        double rho;
-        double T;
-        double gamma;
-        double Le;
-        double Lambda;
-        double MdotF_D_Mdot1;
-
-    };
-
-    struct outerZone{
-        double k;
-        double Cp;
-        double Diff;
-        double rho;
-        double T;
-        double gamma;
-        double Le;
-        double Lambda;
-        double MdotOX_D_Mdot2;
-    };
-
 
     SZBurn(PetscReal convectionCoeff, PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx,
                               PetscReal Lv, PetscReal Hc, const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
@@ -73,7 +48,7 @@ class SZBurn : public ablate::particles::processes::BurningProcess
 
     void CalcBurnRate();
 
-    void SolveSZBurn(double YFs,ablate::particles::processes::burningModel::SZBurn::farFieldProp farfield);
+    void SolveSZBurn(double* YFsguess,std::vector<double>* res,ablate::particles::processes::burningModel::SZBurn::farFieldProp farfield);
 
     void UpdateZoneProperties(ablate::particles::processes::burningModel::SZBurn::farFieldProp* farfield,
                       ablate::particles::processes::burningModel::SZBurn::innerZone* innerzone,

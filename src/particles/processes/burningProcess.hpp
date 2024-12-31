@@ -3,7 +3,7 @@
 
 #include "particles/accessors/eulerianSourceAccessor.hpp"
 #include "particles/processes/coupledProcess.hpp"
-#include "eos/zerork.hpp"
+#include "eos/eos.hpp"
 #include "finiteVolume/compressibleFlowFields.hpp"
 #include "particles/particleSolver.hpp"
 
@@ -61,7 +61,7 @@ struct DropletMaterialProperties {
 class BurningProcess : public CoupledProcess {
     protected:
         //eos needed to keep track of species and do any particular needed burning calculations (cp etc.)
-        std::shared_ptr<eos::zerorkEOS> eos;
+        std::shared_ptr<eos::EOS> eos;
         PetscInt numberSpecies = 0;
         PetscInt oxygenOffset = -1;// offset for the oxygen species
 
@@ -78,7 +78,7 @@ class BurningProcess : public CoupledProcess {
 
     public:
 
-        BurningProcess(std::shared_ptr<eos::zerorkEOS> eosIn,
+        BurningProcess(std::shared_ptr<eos::EOS> eosIn,
                      const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsVapor,
                      const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
                      PetscReal ignitionTemperature, PetscReal nuOx, PetscReal LatentHeat,
@@ -88,9 +88,6 @@ class BurningProcess : public CoupledProcess {
                        ignitionTemperature(ignitionTemperature ? ignitionTemperature : 0),
                        extinguishmentOxygenMassFraction(extinguishmentOxygenMassFraction ? extinguishmentOxygenMassFraction : 0.1)
        {
-            if (!std::dynamic_pointer_cast<eos::zerorkEOS>(eosIn)) {
-                throw std::invalid_argument("The twozone model only accepts eos::zerorkEOS as the input sorry in advance, Kolos");
-            }
 
             // determine the offset for the O2 species in the eos, and if there is none error out
             auto speciesList = eos->GetSpeciesVariables();

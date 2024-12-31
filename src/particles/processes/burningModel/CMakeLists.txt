@@ -1,10 +1,10 @@
 target_sources(ablateLibrary
         PRIVATE
-        twoZone.cpp
+        szBurn.cpp
         noEvaporationConstantBurn.cpp
 
 
         PUBLIC
-        twoZone.hpp
+        szBurn.hpp
         noEvaporationConstantBurn.hpp
         )
