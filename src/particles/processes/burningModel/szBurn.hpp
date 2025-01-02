@@ -16,10 +16,14 @@ class SZBurn : public ablate::particles::processes::BurningProcess
     public:
     const PetscReal burnRate; //D^2 Law constant K
     const PetscReal convectionCoeff; //simple convection heating mode
-    const PetscReal YiFuel[];
+//    const PetscReal YiFuel[];
 
     // the eos used to species the species and compute properties
 //    std::shared_ptr<eos::zerorkEOS> eos;
+    SZBurn(PetscReal convectionCoeff, PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx,
+           PetscReal Lv, PetscReal Hc, const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
+           PetscReal extinguishmentOxygenMassFraction,std::shared_ptr<eos::EOS> eos,
+           std::string  fuelin);
 
     private:
     std::shared_ptr<ablate::particles::processes::burningModel::LiquidFuel> liquidFuel;
@@ -39,20 +43,13 @@ class SZBurn : public ablate::particles::processes::BurningProcess
     };
 
     farFieldProp farField;
+    const std::string fuelType;
 
 
-    SZBurn(PetscReal convectionCoeff, PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx,
-                              PetscReal Lv, PetscReal Hc, const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
-                              PetscReal extinguishmentOxygenMassFraction,std::shared_ptr<eos::zerorkEOS> eos,
-                              const std::string& fuelType);
 
     void CalcBurnRate();
 
     void SolveSZBurn(double* YFsguess,std::vector<double>* res,ablate::particles::processes::burningModel::SZBurn::farFieldProp farfield);
-
-    void UpdateZoneProperties(ablate::particles::processes::burningModel::SZBurn::farFieldProp* farfield,
-                      ablate::particles::processes::burningModel::SZBurn::innerZone* innerzone,
-                      ablate::particles::processes::burningModel::SZBurn::outerZone* outerzone);
 
     void UpdateFarfield(farFieldProp* FarField,double T, double P, double YiO2);
 

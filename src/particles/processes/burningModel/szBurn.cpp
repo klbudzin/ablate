@@ -5,15 +5,17 @@
 //#include "particles/processes/burningModel/liquidFuels/liquidFuel.hpp"
 #include <math.h>
 
+#include <utility>
+
 ablate::particles::processes::burningModel::SZBurn::SZBurn(PetscReal convectionCoeff,
        PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx, PetscReal Lv, PetscReal heatOfCombustion,
        const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
-       PetscReal extinguishmentOxygenMassFraction, std::shared_ptr<eos::zerorkEOS> eosIn,
-       const std::string& fuelType) :
+       PetscReal extinguishmentOxygenMassFraction, std::shared_ptr<eos::EOS> eosIn,std::string  fuelin) :
        BurningProcess(std::move(eosIn), {}, massFractionsProducts, ignitionTemperature, nuOx, Lv, heatOfCombustion, extinguishmentOxygenMassFraction),
-       burnRate(burnRate), convectionCoeff(convectionCoeff)
-       {
+       burnRate(burnRate), convectionCoeff(convectionCoeff),fuelType(fuelin)
 
+       {
+    //TODO figure out how to make the fuel in as an input....
 
     //one can easily add more fuels here
     if (fuelType == "wax") {
@@ -24,7 +26,7 @@ ablate::particles::processes::burningModel::SZBurn::SZBurn(PetscReal convectionC
     }
 
 
-    nSpc=eosIn->mech->getNumSpecies();
+//    nSpc=eosIn->mech->getNumSpecies();
 
 
     //initialize farfield //TODO make these as optional inputs
@@ -143,8 +145,8 @@ void ablate::particles::processes::burningModel::SZBurn::ComputeEulerianSource(P
         SolveSZBurn(&Yguess,&res,farField);
 
         //Calculate burn rate and mass loss rate from the transfer number
-        mdot = 4.*np.pi*ro*(kg/Cpg)*np.log(1+BoxT);
-        K = 8*(kg/Cpg/rhol)*np.log(1+BoxT);
+//        mdot = 4.*np.pi*ro*(kg/Cpg)*np.log(1+BoxT);
+//        K = 8*(kg/Cpg/rhol)*np.log(1+BoxT);
 
 
 
@@ -194,7 +196,7 @@ void ablate::particles::processes::burningModel::SZBurn::SolveSZBurn(double* YFs
 
     //TODO figure out how to set the elements of the pointer
     res[0].assign(0,YFs_new);
-    res[1].assign(YFs_new);
+//    res[1].assign(YFs_new);
 
 }
 
@@ -202,14 +204,15 @@ void ablate::particles::processes::burningModel::SZBurn::SolveSZBurn(double* YFs
 
 
 #include "registrar.hpp"
+
 REGISTER(ablate::particles::processes::Process, ablate::particles::processes::burningModel::SZBurn, "Example of an no evaporation/Burning Model",
          ARG(PetscReal, "convectionCoefficient", "The convection Coefficient for the simple heating mode"),
          OPT(PetscReal, "IgnitionTemperature", "The temperature of the far field where it is said to *ignite*"),
          OPT(PetscReal, "burnRate", "The constant burning rate K for the d^2 law (defaults to 0)"),
          OPT(PetscReal, "nuOx", "stoichiometric oxidizer mass coefficient (defaults to 0)"),
          OPT(PetscReal, "Lv", "LatentHeat of Vaporization (defaults to 1e5)"),
-         OPT(PetscReal, "Hc", "heat of combustion per unit mass of fuel (defaults to 1e6"),
+         OPT(PetscReal, "Hc", "heat of combustion per unit mass of fuel (defaults to 1e6)"),
          ARG(ablate::mathFunctions::FieldFunction, "productsMassFractions", "The product species functions"),
-         ARG(std::string, "fuelType", "The type of liquid fuel, curently implmented: 'wax'"),
          OPT(PetscReal, "extinguishmentOxygenMassFraction", "The minimum oxygen mass fraction needed for burning (defaults to 0.1)"),
-         ARG(ablate::eos::EOS, "eos", "the eos used to compute various gas properties") );
+         ARG(ablate::eos::EOS, "eos", "the eos used to compute various gas properties"),
+         ARG(std::string, "fuelType", "The type of liquid fuel, curently implmented: 'wax'") );
