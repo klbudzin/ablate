@@ -50,7 +50,7 @@ class BurningParticleSolver : public CoupledParticleSolver{
     */
     inline PetscBool CheckMinimumDiameterLimit(PetscReal particleDiameter) const { return (particleDiameter < minimumDiameter) ? PETSC_TRUE : PETSC_FALSE;}
 
-    void DecodeSolverAuxVariables() override;
+    void DecodeSolverAuxVariables(double dt) override;
 
     //! cleanup any petsc objects
     ~BurningParticleSolver() override = default;

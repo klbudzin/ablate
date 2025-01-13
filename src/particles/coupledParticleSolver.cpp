@@ -220,7 +220,7 @@ void ablate::particles::CoupledParticleSolver::MacroStepParticles(TS macroTS, bo
 
     //Decode any Aux Variables from the new solution before updating the eulerian source in case it uses any of the decoded
     //Variables (Can eventually use this to bypass the timestepp if we ever want to in a process
-    DecodeSolverAuxVariables();
+    DecodeSolverAuxVariables(endTime-startTime);
 
     // Update the source terms
     ComputeEulerianSource(startTime, endTime);

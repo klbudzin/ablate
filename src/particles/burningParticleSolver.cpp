@@ -38,7 +38,7 @@
                                                   std::move(processes), std::move(initializer), std::move(fieldInitialization), minimumDiameterIn, std::move(exactSolutions), coupledFields)
                           {}
 
-    void ablate::particles::BurningParticleSolver::DecodeSolverAuxVariables() {
+    void ablate::particles::BurningParticleSolver::DecodeSolverAuxVariables(double dt) {
     //Note I might want to move this to the burning model thus different models can overload this call, this would allow and easy access to use an anlaytical solution
     //i.e. don't set any RHS call in the burning Model so nothing is done on the petsc side for that process (in this case drag would still be calculated over that time which is probably fine, but can also change that model!
 
@@ -61,6 +61,7 @@
         // Attach a UpdateAuxFields Method to coupledProcesses and Call that here, or at least attach it to burning Model and call that here
         // to do an analytical time steppeds solution, should be able to have the macrostepper pass in startTime end Time here as well,
         // can even have an analytical toggle
+        this->burningModel->UpdateAuxFields();
 
         //Allow the Burning Model to handel updating whether a particle is burning or not
         if(burningModel)

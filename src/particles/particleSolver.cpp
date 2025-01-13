@@ -805,7 +805,8 @@ PetscErrorCode ablate::particles::ParticleSolver::Restore(PetscViewer viewer, Pe
     PetscFunctionReturn(0);
 }
 
-void ablate::particles::ParticleSolver::DecodeSolverAuxVariables() {}
+void ablate::particles::ParticleSolver::DecodeSolverAuxVariables() {DecodeSolverAuxVariables(0.0);}
+void ablate::particles::ParticleSolver::DecodeSolverAuxVariables(double dt) {}
 
 #include "registrar.hpp"
 REGISTER(ablate::solver::Solver, ablate::particles::ParticleSolver, "Lagrangian particle solver", ARG(std::string, "id", "the name of the particle solver"),

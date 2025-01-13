@@ -6,6 +6,7 @@
 #include "eos/zerork.hpp"
 #include "particles/processes/burningModel/liquidFuels/liquidFuel.hpp"
 #include "particles/processes/burningModel/dropletFlame/cxhyozFlame.hpp"
+#include <vector>
 
 
 namespace ablate::particles::processes::burningModel {
@@ -14,12 +15,14 @@ namespace ablate::particles::processes::burningModel {
 class SZBurn : public ablate::particles::processes::BurningProcess
 {
     public:
-    const PetscReal burnRate; //D^2 Law constant K
+    PetscReal burnRate; //D^2 Law constant K
     const PetscReal convectionCoeff; //simple convection heating mode
+    PetscReal Ts;
 //    const PetscReal YiFuel[];
 
     // the eos used to species the species and compute properties
 //    std::shared_ptr<eos::zerorkEOS> eos;
+
     SZBurn(PetscReal convectionCoeff, PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx,
            PetscReal Lv, PetscReal Hc, const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
            PetscReal extinguishmentOxygenMassFraction,std::shared_ptr<eos::EOS> eos,
@@ -29,32 +32,55 @@ class SZBurn : public ablate::particles::processes::BurningProcess
     std::shared_ptr<ablate::particles::processes::burningModel::LiquidFuel> liquidFuel;
     std::shared_ptr<ablate::particles::processes::burningModel::CxHyOzFlame> flame;
 
+    double MWair = 28.96;
+    double mDot;
 
+    struct Constants{
+        const double qlimfac=0.1;
+        const double Pivalue=3.14159;
+    };
 
+    struct resultsStruct{
+        double F;
+        double Yfs_new;
+        double Ts;
+        double mdot;
+        double rstar;
+        double Tf;
+        double K;
+    };
+    resultsStruct result;
+
+    struct TransportConstStruct{
+        const double pr = 0.707;
+        const double muo = 1.716e-5;
+        const double to = 273.e+0;
+        const double so = 111.e+0;
+        const double sc = 0.707;
+    };
+    TransportConstStruct TransportConst;
 
     struct farFieldProp{
         double rox;
         double Temperature;
         double Pressure = 101325;
-        //TODO could set up later to include a vector for chemical equilibrium...
-//        std::vector<double> Y(int nSpc);
         double Yox = 1;
+        double kg;
 
     };
-
     farFieldProp farField;
-    const std::string fuelType;
 
 
+    std::string fuelType;
+
+    // store the name of species used in the ode solver
+    const std::vector<std::string> speciesNames;
+    std::vector<int> speciesOffSet;
 
     void CalcBurnRate();
 
-    void SolveSZBurn(double* YFsguess,std::vector<double>* res,ablate::particles::processes::burningModel::SZBurn::farFieldProp farfield);
-
+    void SolveSZBurn(double* YFsguess,resultsStruct* results,ablate::particles::processes::burningModel::SZBurn::farFieldProp* farfield);
     void UpdateFarfield(farFieldProp* FarField,double T, double P, double YiO2);
-
-    void TwoZoneTransport(double* T,double* density,double* Yi[],double* Cp,double* k,double* D);
-
 
     /**
      * Overload default calls to be do nothing calls
@@ -81,38 +107,7 @@ class SZBurn : public ablate::particles::processes::BurningProcess
         }
      }
 
-    private:
 
-     double nSpec;
-     double YFs;
-     double MWair = 28.96;
-     double Dp;
-     double Ts;
-     double ql;
-     double mDot;
-     double K;
-     double qlimfac=0.1;
-     int nSpc=10;
-     const double Pivalue=3.14159;
-
-     struct results{
-         double F;
-         double Yfs_new;
-         double Ts;
-         double mdot1;
-         double rstar;
-         double Tf;
-     };
-
-     struct TransportConstsstruct{
-         inline const static PetscReal pr = 0.707;
-         inline const static PetscReal muo = 1.716e-5;
-         inline const static PetscReal to = 273.e+0;
-         inline const static PetscReal so = 111.e+0;
-         inline const static PetscReal sc = 0.707;
-     };
-
-     TransportConstsstruct TransportConst;
 
 
 };
