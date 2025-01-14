@@ -9,8 +9,8 @@ namespace ablate::particles::processes::burningModel {
 class waxFlame : public ablate::particles::processes::burningModel::CxHyOzFlame {
    public:
     waxFlame() {
-        x = 31;
-        y = 64;
+        x = 32;
+        y = 66;
         z = 0;
 
         double YO2_inf = 0.23;
@@ -20,7 +20,7 @@ class waxFlame : public ablate::particles::processes::burningModel::CxHyOzFlame 
         nuH2O = 0.5 * y * MWH2O / MWFuel;
 
         Tad = 2700;
-        Hc = 42E6;
+        Hc = 41.1E6;
     }
 
     const std::string fuelname = "wax";

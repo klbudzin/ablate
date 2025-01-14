@@ -7,12 +7,15 @@
 
 #include <utility>
 
+
+
+
 ablate::particles::processes::burningModel::SZBurn::SZBurn(PetscReal convectionCoeff,
        PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx, PetscReal Lv, PetscReal heatOfCombustion,
        const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
        PetscReal extinguishmentOxygenMassFraction, std::shared_ptr<eos::EOS> eosIn,std::string  fuelin) :
        BurningProcess(std::move(eosIn), {}, massFractionsProducts, ignitionTemperature, nuOx, Lv, heatOfCombustion, extinguishmentOxygenMassFraction),
-       burnRate(burnRate), convectionCoeff(convectionCoeff),speciesNames{fuelin, "O2", "N2", "CO2", "H2O"},speciesOffSet(5, -1)
+       K(burnRate), convectionCoeff(convectionCoeff),speciesNames{fuelin, "O2", "N2", "CO2", "H2O"},speciesOffSet(5, -1)
 
        {
 
@@ -26,7 +29,7 @@ ablate::particles::processes::burningModel::SZBurn::SZBurn(PetscReal convectionC
         throw std::invalid_argument("No liquid fuel, flamelet of the fuel with formula: " + fuelin);
     }
 
-    //initialize farfield //TODO make these as optional inputs
+    //initialize farfield
     farField.Temperature = 350.0;
     farField.Pressure = 101325.0;
     farField.Yox = 1.0;
@@ -48,8 +51,9 @@ ablate::particles::processes::burningModel::SZBurn::SZBurn(PetscReal convectionC
     if (cnt > 0)
         throw std::runtime_error("The Shvab-Zeldovich model requires fuelFormula,O2,N2,CO2,H2O to work.");
 
-    //Initialize surface temperature to 300
-    Ts=300;
+    //Initilaize droplet to 300 and 0.1 mm
+    Td=300;
+    Dp=100E-6;
 
 }
 
@@ -68,22 +72,23 @@ void ablate::particles::processes::burningModel::SZBurn::ComputeRHS(PetscReal ti
     auto farFieldSpecies = eulerianAccessor[ablate::finiteVolume::CompressibleFlowFields::YI_FIELD];
     //TODO get the actual O2 mass fractions;
     double YiO2=1;
-    UpdateFarfield(&farField, farFieldTemperature.values[0],farFieldPressure.values[0],YiO2);
+    UpdateFarfield(farFieldTemperature.values[0],farFieldPressure.values[0],YiO2);
+    UpdateFarfield(300,101325,0.5);
 
 
     //TODO figure this thing out...
-    //Burning particles
-    auto tempRHS = rhsAccessor[ablate::particles::ParticleSolver::ParticleTemperature];
-    //Grab The fields of the particle that we will be changing
-    auto massRHS = rhsAccessor[ablate::particles::ParticleSolver::ParticleMass];
-    //Grab the Particle Fields we need
-    auto partDensity = swarmAccessor[ablate::particles::ParticleSolver::ParticleDensity];
-    auto particlesPerParcel = swarmAccessor[ablate::particles::ParticleSolver::ParticleNPP];
-    auto partDiameterAvg = swarmAccessor[ablate::particles::ParticleSolver::ParticleDiameter];
-    auto partBurning = swarmAccessor[ablate::particles::ParticleSolver::ParticleBurning];
-    auto partTemperature = swarmAccessor[ablate::particles::ParticleSolver::ParticleTemperature];
-    auto partCp = swarmAccessor[ablate::particles::ParticleSolver::ParticleCP];
-    auto parcelMass = swarmAccessor[ablate::particles::ParticleSolver::ParticleMass];
+//    //Burning particles
+//    auto tempRHS = rhsAccessor[ablate::particles::ParticleSolver::ParticleTemperature];
+//    //Grab The fields of the particle that we will be changing
+//    auto massRHS = rhsAccessor[ablate::particles::ParticleSolver::ParticleMass];
+//    //Grab the Particle Fields we need
+//    auto partDensity = swarmAccessor[ablate::particles::ParticleSolver::ParticleDensity];
+//    auto particlesPerParcel = swarmAccessor[ablate::particles::ParticleSolver::ParticleNPP];
+//    auto partDiameterAvg = swarmAccessor[ablate::particles::ParticleSolver::ParticleDiameter];
+//    auto partBurning = swarmAccessor[ablate::particles::ParticleSolver::ParticleBurning];
+//    auto partTemperature = swarmAccessor[ablate::particles::ParticleSolver::ParticleTemperature];
+//    auto partCp = swarmAccessor[ablate::particles::ParticleSolver::ParticleCP];
+//    auto parcelMass = swarmAccessor[ablate::particles::ParticleSolver::ParticleMass];
 
 
 
@@ -126,10 +131,10 @@ void ablate::particles::processes::burningModel::SZBurn::ComputeEulerianSource(P
     auto parcelBurning = swarmAccessorPostStep[ablate::particles::ParticleSolver::ParticleBurning];
     auto parcelCp = swarmAccessorPostStep[ablate::particles::ParticleSolver::ParticleCP];
 
-    PetscReal mdot=mDot;
+
     //Product Species will be the same for all particles so calculate them here
     //The below should work since the function should be a constant function and not dependent on space or time
-
+    double mdot;
     //Compute the source terms due to burning/ heat transfer
     for (PetscInt p = 0; p < np; ++p) {
 
@@ -156,69 +161,156 @@ void ablate::particles::processes::burningModel::SZBurn::ComputeEulerianSource(P
     }
 }
 
-    void ablate::particles::processes::burningModel::SZBurn::CalcBurnRate() {
-
-        double Yguess=1;
-
-        SolveSZBurn(&Yguess,&result,&farField);
-
-    //Calculate burnrate, Energy source,
-    burnRate = result.K;
-}
-
-void ablate::particles::processes::burningModel::SZBurn::UpdateFarfield(ablate::particles::processes::burningModel::SZBurn::farFieldProp* farfield,
-                                                                        double Tfar, double Pfar, double YiO2far) {
+void ablate::particles::processes::burningModel::SZBurn::UpdateFarfield(double Tfar, double Pfar, double YiO2far) {
     //Update properties
-    farfield->Temperature=Tfar;
-    farfield->Pressure=Pfar;
-    farfield->Yox=YiO2far;
+    farField.Temperature=Tfar;
+    farField.Pressure=Pfar;
+    farField.Yox=YiO2far;
 
     double nN2dnO2=((1-YiO2far)*28)/(YiO2far*32);
+    printf("nN2dnO2 is: %f\n", nN2dnO2);
 
     //rox = (x+y/4)*(MWO2+3.76*MWN2)/MWF
-    farfield->rox = (flame->x+flame->y/4)*(flame->MWO2+nN2dnO2*flame->MWN2)/flame->MWFuel;
+    farField.rox = (flame->x+flame->y/4)*(flame->MWO2+nN2dnO2*flame->MWN2)/flame->MWFuel;
 
-    //Calculate gas transport (conductivity)
-
+    //Gas transport (conductivity)
     double mug = TransportConst.muo * PetscSqrtReal(Tfar / TransportConst.to) * (Tfar / TransportConst.to) * (TransportConst.to + TransportConst.so) / (Tfar + TransportConst.so);
 
-//    *Cp = eos->mech->getMassCpFromTY();
-    farfield->kg = mug * liquidFuel->fuelProperties.Cp / TransportConst.pr;
+    //For now, this is not the best...
+    farField.Cpg = liquidFuel->fuelProperties.Cp;
+    //Alternativelly, need to change EOS to zerork
+//    farField.Cpg = eos->mech->getMassCpFromTY();
 
-
+    //Conductivity of the gas
+    farField.kg = mug * farField.Cpg  / TransportConst.pr;
 };
 
+void ablate::particles::processes::burningModel::SZBurn::CalcBurnRate() {
 
-void ablate::particles::processes::burningModel::SZBurn::SolveSZBurn(double* YFsguess,resultsStruct* results,ablate::particles::processes::burningModel::SZBurn::farFieldProp* farfield){
+    //Solve the droplet itteration
+    double root = BisectionMethodSolve([this](double Y) { return SolveSZBurn(Y); },0.999999,1E-10,1e-10,100);
 
-    double YFs_old = *YFsguess;
-    double MWs = 1/(YFs_old/liquidFuel->fuelProperties.MW + (1-YFs_old)/MWair);
-    double Pvap = YFs_old * farfield->Pressure * MWs / liquidFuel->fuelProperties.MW;
-
-    //Bound the vapor pressure
-    Pvap = std::min(Pvap,farfield->Pressure);
-    Pvap = std::max(Pvap, 1E-20);
-
-    //calculate the surface temperature
-    double Tsnew = 290;
-    liquidFuel->Tvap(&Tsnew,&Pvap);
-
-    double ql=0; //TODO implement a model for heat transfer into surface
-//    mDot =0; // TODO Need this to calculate heatflux
-
-    double BoxT = (farfield->Yox*flame->Hc/farfield->rox+liquidFuel->fuelProperties.Cp*(farfield->Temperature-Tsnew))/liquidFuel->fuelProperties.Hvap;
-
-    double YFs_new = BoxT/(1+BoxT);
-
-    YFs_new = std::min(YFs_new, 1.);
-    YFs_new = std::max(YFs_new, 0.);
-    results->Yfs_new=YFs_new;
-
-    results->F=YFs_new-YFs_old;
-    results->K=8*farfield->kg/(liquidFuel->fuelProperties.Cp*liquidFuel->fuelProperties.rhol)* log(1+BoxT);
-//    results->mdot=
+    //Set burn rate
+    K = result.K;
 }
 
+double ablate::particles::processes::burningModel::SZBurn::SolveSZBurn(double YAsOld) {
+    double MWs = 1 / (YAsOld / liquidFuel->fuelProperties.MW + (1 - YAsOld) / MWair);
+    double Pvap = YAsOld * farField.Pressure * MWs / liquidFuel->fuelProperties.MW;
+
+    // Bound the vapor pressure
+    Pvap = std::min(Pvap, farField.Pressure);
+    Pvap = std::max(Pvap, 1E-20);
+
+    // Calculate the surface temperature
+    double Tsnew;
+    liquidFuel->Tvap(&Tsnew, &Pvap);
+
+//    double MdotF_D_Mdot1=1;
+//    double MdotOX_D_Mdot2 = 0; -nuO2
+//    double gamma1 = 1; //Temperature dependent gamma = mu(T) * Sc
+//    double gamma2 = 1;
+//
+//    double LHS = log((MdotF_D_Mdot1 - YAsOld) / MdotF_D_Mdot1) / log(MdotOX_D_Mdot2 / (MdotOX_D_Mdot2 - farField.Yox));
+//    double rf_rs = 1 + LHS * gamma1 / gamma2;
+//    double mdot1 = 2 * PETSC_PI * Dp * gamma1 / (1. - 1. /(rf_rs+1E-20)) * log(MdotF_D_Mdot1 / (MdotF_D_Mdot1 - YAsOld));
+
+    double Bm = YAsOld/(1-YAsOld);
+    double mdot = 2.*PETSC_PI*Dp*(farField.kg/farField.Cpg)*log(1+Bm)/Bm;
+    double Ad = Dp*Dp*PETSC_PI;
+    double mFlux = mdot/Ad;
+
+    double ql = -liquidFuel->fuelProperties.kl * (Tsnew - Td) / (max(0.5*Dp, 1E-10));
+    double qlLimiter = abs(dropletConstants.qlimfac * mFlux * liquidFuel->fuelProperties.Hvap) / abs(ql + 1E-10);
+
+    qlLimiter = std::min(qlLimiter,1.e+0);
+    ql = ql* qlLimiter;
+//    ql = 0;
+
+
+    double BoxT = (farField.Yox * flame->Hc / farField.rox + farField.Cpg  * (farField.Temperature - Tsnew)) / (liquidFuel->fuelProperties.Hvap - ql/mFlux);
+
+    double YFs_new = BoxT / (1 + BoxT);
+
+    YFs_new = std::min(YFs_new, 1.0);
+    YFs_new = std::max(YFs_new, 0.0);
+    result.Yfs_new = YFs_new;
+
+    result.K = 8 * farField.kg / (farField.Cpg  * liquidFuel->fuelProperties.rhol) * log(1 + BoxT);
+
+    return YFs_new - YAsOld;
+}
+
+void ablate::particles::processes::burningModel::SZBurn::CalcEvapRate() {
+
+    //Solve the droplet itteration
+    double root = BisectionMethodSolve([this](double Y) { return SolveSZEvap(Y); },0.999999,1E-10,1e-10,100);
+
+    //Set evaporation rate
+    K = result.K;
+}
+
+double ablate::particles::processes::burningModel::SZBurn::SolveSZEvap(double YAsOld) {
+    double MWs = 1 / (YAsOld / liquidFuel->fuelProperties.MW + (1 - YAsOld) / MWair);
+    double Pvap = YAsOld * farField.Pressure * MWs / liquidFuel->fuelProperties.MW;
+
+    // Bound the vapor pressure
+    Pvap = std::min(Pvap, farField.Pressure);
+    Pvap = std::max(Pvap, 1E-20);
+
+    // Calculate the surface temperature
+    double Tsnew;
+    liquidFuel->Tvap(&Tsnew, &Pvap);
+
+    double Bm = YAsOld/(1-YAsOld);
+    double mdot = 2.*PETSC_PI*Dp*(farField.kg/farField.Cpg)*log(1+Bm)/Bm;
+    double Ad = Dp*Dp*PETSC_PI;
+    double mFlux = mdot/Ad;
+
+    double ql = -liquidFuel->fuelProperties.kl * (Tsnew - Td) / (max(0.5*Dp, 1E-10));
+    double qlLimiter = abs(dropletConstants.qlimfac * mFlux * liquidFuel->fuelProperties.Hvap) / abs(ql + 1E-10);
+
+    qlLimiter = std::min(qlLimiter,1.e+0);
+    ql = ql* qlLimiter;
+    //    ql = 0;
+
+    double BoxT = (farField.Cpg  * (farField.Temperature - Tsnew)) / (liquidFuel->fuelProperties.Hvap - ql/mFlux);
+
+    double YFs_new = BoxT / (1 + BoxT);
+
+    YFs_new = std::min(YFs_new, 1.0);
+    YFs_new = std::max(YFs_new, 0.0);
+    result.Yfs_new = YFs_new;
+
+    result.K = 8 * farField.kg / (farField.Cpg  * liquidFuel->fuelProperties.rhol) * log(1 + BoxT);
+
+    return YFs_new - YAsOld;
+}
+
+
+double ablate::particles::processes::burningModel::SZBurn::BisectionMethodSolve(std::function<double(double)> func, double a, double b, double tol, int maxIter) {
+    if (func(a) * func(b) >= 0) {
+        std::cerr << "Error: The function must have opposite signs at the endpoints a and b." << std::endl;
+        return NAN;
+    }
+
+    double c = a;
+    for (int i = 0; i < maxIter; ++i) {
+        c = (a + b) / 2; // Midpoint
+        if (func(c) == 0.0 || abs(b - a) / 2 < tol) {
+            return c; // Root found or tolerance met
+//            continue;
+        }
+        if (func(c) * func(a) < 0) {
+            b = c; // Root is in left
+        } else {
+            a = c; // Root is in right
+        }
+    }
+
+    std::cerr << "Warning: Maximum number of iterations reached. Approximate root: " << c << std::endl;
+    return c;
+}
 
 
 

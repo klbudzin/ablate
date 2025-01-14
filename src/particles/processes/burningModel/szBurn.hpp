@@ -7,17 +7,20 @@
 #include "particles/processes/burningModel/liquidFuels/liquidFuel.hpp"
 #include "particles/processes/burningModel/dropletFlame/cxhyozFlame.hpp"
 #include <vector>
+#include <functional>
 
 
 namespace ablate::particles::processes::burningModel {
 
 
+
 class SZBurn : public ablate::particles::processes::BurningProcess
 {
     public:
-    PetscReal burnRate; //D^2 Law constant K
+    PetscReal K; //D^2 Law constant K
     const PetscReal convectionCoeff; //simple convection heating mode
-    PetscReal Ts;
+    PetscReal Td;
+    double Dp;
 //    const PetscReal YiFuel[];
 
     // the eos used to species the species and compute properties
@@ -32,20 +35,21 @@ class SZBurn : public ablate::particles::processes::BurningProcess
     std::shared_ptr<ablate::particles::processes::burningModel::LiquidFuel> liquidFuel;
     std::shared_ptr<ablate::particles::processes::burningModel::CxHyOzFlame> flame;
 
+
     double MWair = 28.96;
     double mDot;
 
     struct Constants{
         const double qlimfac=0.1;
-        const double Pivalue=3.14159;
     };
+    Constants dropletConstants;
 
     struct resultsStruct{
         double F;
         double Yfs_new;
         double Ts;
         double mdot;
-        double rstar;
+        double rstar; //need this for later...
         double Tf;
         double K;
     };
@@ -66,6 +70,7 @@ class SZBurn : public ablate::particles::processes::BurningProcess
         double Pressure = 101325;
         double Yox = 1;
         double kg;
+        double Cpg;
 
     };
     farFieldProp farField;
@@ -73,14 +78,22 @@ class SZBurn : public ablate::particles::processes::BurningProcess
 
     std::string fuelType;
 
+
+    double BisectionMethodSolve(std::function<double(double)> func, double a, double b, double tol, int maxIter);
+
     // store the name of species used in the ode solver
     const std::vector<std::string> speciesNames;
     std::vector<int> speciesOffSet;
 
     void CalcBurnRate();
 
-    void SolveSZBurn(double* YFsguess,resultsStruct* results,ablate::particles::processes::burningModel::SZBurn::farFieldProp* farfield);
-    void UpdateFarfield(farFieldProp* FarField,double T, double P, double YiO2);
+    double SolveSZBurn(double YFsguess);
+
+    void CalcEvapRate();
+
+    double SolveSZEvap(double YFsguess);
+
+    void UpdateFarfield(double T, double P, double YiO2);
 
     /**
      * Overload default calls to be do nothing calls
