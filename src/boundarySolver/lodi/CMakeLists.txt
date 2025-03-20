@@ -5,11 +5,14 @@ target_sources(ablateLibrary
         openBoundary.cpp
         inlet.cpp
         stagnationEnthalpy.cpp
+        pressureTankInlet.cpp
+
         PUBLIC
         lodiBoundary.hpp
         isothermalWall.hpp
         openBoundary.hpp
         inlet.hpp
         stagnationEnthalpy.hpp
+        pressureTankInlet.hpp
         )
 
