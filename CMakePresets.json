@@ -65,6 +65,21 @@
       }
     },
     {
+      "name": "local-ablate-opt-TensorFlow",
+      "displayName": "CLion Opt Config",
+      "description": "Default build for ABLATE in CLion With TensorFlow",
+      "binaryDir": "${sourceDir}/cmake-build-opt-ablate-tF",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "COMPILE_MPI_COMMAND": "$env{PETSC_DIR}/arch-ablate-opt/bin/mpirun"
+      },
+      "environment": {
+        "PETSC_ARCH": "arch-ablate-opt",
+        "PKG_CONFIG_PATH": "$env{PETSC_DIR}/arch-ablate-opt/lib/pkgconfig:$penv{PKG_CONFIG_PATH}",
+        "TENSORFLOW_DIR": "/home/klbud/Software/tensorFlow/"
+      }
+    },
+    {
       "name": "local-ablate-opt-info",
       "displayName": "CLion RelWithDebugInfo Config",
       "description": "Default build for ABLATE in CLion",

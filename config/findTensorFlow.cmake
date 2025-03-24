@@ -31,7 +31,7 @@ elseif(DEFINED ENV{TENSORFLOW_DIR} AND (NOT $ENV{TENSORFLOW_DIR} STREQUAL ""))
 
         # Build a list of include directories
         list(APPEND TENSORFLOW_INCLUDE_DIRS ${TENSORFLOW_DIR}/include)
-        list(APPEND TENSORFLOW_INCLUDE_DIRS ${TENSORFLOW_DIR}/include/external/local_tsl/)
+        list(APPEND TENSORFLOW_INCLUDE_DIRS ${TENSORFLOW_DIR}/include/tsl/)
 
         set_target_properties(
                 TensorFlow
