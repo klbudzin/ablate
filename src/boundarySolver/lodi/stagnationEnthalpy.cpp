@@ -8,7 +8,6 @@ ablate::boundarySolver::lodi::StagnationEnthalpy::StagnationEnthalpy(std::shared
 void ablate::boundarySolver::lodi::StagnationEnthalpy::Setup(ablate::boundarySolver::BoundarySolver &bSolver) {
     ablate::boundarySolver::lodi::LODIBoundary::Setup(bSolver);
     bSolver.RegisterFunction(StagnationEnthalpyFunction, this, fieldNames, fieldNames, {});
-
     bSolver.RegisterFunction(UpdateEnergy, this, {finiteVolume::CompressibleFlowFields::EULER_FIELD}, {finiteVolume::CompressibleFlowFields::TEMPERATURE_FIELD});
 }
 
@@ -137,10 +136,10 @@ PetscErrorCode ablate::boundarySolver::lodi::StagnationEnthalpy::UpdateEnergy(Pe
     PetscFunctionBeginUser;
     auto stagInlet = (StagnationEnthalpy *)ctx;
     PetscScalar boundaryPressure;
-    PetscScalar boundaryDensity = boundaryValues[uOff[stagInlet->eulerId] + RHO];
+    PetscScalar boundaryDensity = boundaryValues[uOff[0] + RHO];
     PetscCall(stagInlet->computePressureFromTemperature.function(boundaryValues, auxValues[aOff[0]], &boundaryPressure, stagInlet->computePressureFromTemperature.context.get()));
     //Total energy = h_stag - P/\rho |_{boundary}
-    boundaryValues[uOff[stagInlet->eulerId] + finiteVolume::CompressibleFlowFields::RHOE] = boundaryDensity*stagInlet->stagnationEnthalpy - boundaryPressure ;
+    boundaryValues[uOff[0] + RHOE] = boundaryDensity*stagInlet->stagnationEnthalpy - boundaryPressure ;
     PetscFunctionReturn(0);
 }
 
