@@ -6,6 +6,7 @@ target_sources(ablateLibrary
         inlet.cpp
         stagnationEnthalpy.cpp
         pressureTankInlet.cpp
+        massFluxInlet.cpp
 
         PUBLIC
         lodiBoundary.hpp
@@ -14,5 +15,6 @@ target_sources(ablateLibrary
         inlet.hpp
         stagnationEnthalpy.hpp
         pressureTankInlet.hpp
+        massFluxInlet.hpp
         )
 

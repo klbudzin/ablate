@@ -94,16 +94,28 @@ PetscErrorCode ablate::boundarySolver::lodi::PressureTankInlet::PressureTankInle
 
     // Get scriptL
     std::vector<PetscReal> scriptL(Inlet->nEqs);
-    scriptL[1 + dim] = lambda[1 + dim] * (dPdNorm - boundaryDensity * dVeldNorm * alpha2 * (velNormPrim - boundaryNormalVelocity - speedOfSoundPrim));  // Outgoing Accoustic Wave
-    PetscScalar F;
-    F = boundaryCp/boundaryCv*boundaryNormalVelocity*speedOfSoundPrim;
-    F = F/(boundarySpeedOfSound*boundarySpeedOfSound/alpha2 + boundaryCp/boundaryCv*boundaryNormalVelocity*(velNormPrim-boundaryNormalVelocity));
-    F = (1+F)/(1-F);
-    scriptL[0] = F*scriptL[1 + dim]; //incoming acoustic wave assuming constant mass flux
-//    scriptL[1] = 0; // Entropy wave, 0 because of isentropic assumption with BC derivation
-    //Below is isothermal assumption
-    scriptL[1] = 0.5 * (boundaryCp/boundaryCv-1) * (scriptL[1+dim] + scriptL[0]) -
-                 0.5 * (boundaryCp/boundaryCv+1) * (scriptL[0] - scriptL[1+dim]) * (velNormPrim-boundaryNormalVelocity)/speedOfSoundPrim ;
+    //If flow is choked, all L's should be 0 I believe
+    if (-boundaryNormalVelocity >= boundarySpeedOfSound){
+        //Flow is choked as an inlet
+        scriptL[0] = 0;
+        scriptL[1] = 0;
+        scriptL[1+dim] = 0;
+        //Perhaps it should just be scriptL 1+dim = 0 and constant mass flux assumption to pin the rest
+        scriptL[0] = lambda[0] * (dPdNorm + boundaryDensity * dVeldNorm * alpha2 * (velNormPrim - boundaryNormalVelocity - speedOfSoundPrim));
+        scriptL[1+dim] = 0; //The lambda should be 0 since u_n + a = 0
+        scriptL[1] = -scriptL[0]; //Set by assuming mass flux has to be constant
+    } else {
+        //I believe it should just act as an isentropic constant mass flux BC,
+        //Even if the mass flux isn't exactly constant (Hopefully this doesn't break it)
+            //Calculating L_0 here since L_1+dim would be 0 if choked, IDK if it causes any problems tbh
+        PetscScalar term1, term2;
+        term1 = (boundaryCp / boundaryCv + 1)/(boundaryCp / boundaryCv - 1) * (velNormPrim -boundaryNormalVelocity) / (speedOfSoundPrim);
+        term2 = boundaryNormalVelocity/(speedOfSoundPrim*alpha2);
+        scriptL[1 + dim] = lambda[1 + dim] * (dPdNorm - boundaryDensity * dVeldNorm * alpha2 * (velNormPrim - boundaryNormalVelocity - speedOfSoundPrim));  // Outgoing Accoustic Wave
+        scriptL[0] = -scriptL[1 + dim]*(1+term1+term2)/(1-term1-term2); // incoming accoustic wave
+        scriptL[1] = 0; //Still isentropic
+    }
+    //Everything else should be 0
     for (int d = 1; d < dim; d++) {
         scriptL[1 + d] = 0.e+0;  // Tangential velocities
     }
@@ -118,20 +130,20 @@ PetscErrorCode ablate::boundarySolver::lodi::PressureTankInlet::PressureTankInle
 
     // Directly compute the source terms, note that this may be problem in the future with multiple source terms on the same boundary cell
     Inlet->GetmdFdn(sOff,
-                             boundaryVelNormCord,
-                             boundaryDensity,
-                             boundaryTemperature,
-                             boundaryCp,
-                             boundaryCv,
-                             boundarySpeedOfSound,
-                             boundarySensibleEnthalpy,
-                             velNormPrim,
-                             speedOfSoundPrim,
-                             boundaryValues,
-                             uOff,
-                             scriptL.data(),
-                             transformationMatrix,
-                             source);
+                    boundaryVelNormCord,
+                    boundaryDensity,
+                    boundaryTemperature,
+                    boundaryCp,
+                    boundaryCv,
+                    boundarySpeedOfSound,
+                    boundarySensibleEnthalpy,
+                    velNormPrim,
+                    speedOfSoundPrim,
+                    boundaryValues,
+                    uOff,
+                    scriptL.data(),
+                    transformationMatrix,
+                    source);
 
     PetscFunctionReturn(0);
 }
@@ -141,22 +153,27 @@ PetscErrorCode ablate::boundarySolver::lodi::PressureTankInlet::UpdateConservedV
                                                                            PetscScalar *auxValues, const PetscScalar *stencilAuxValues, void *ctx) {
     PetscFunctionBeginUser;
     auto Inlet = (PressureTankInlet *)ctx;
-    //Assuming Temperature is correct at the boundary, update values using the isentropic relations and choked/unchoked mass flux
+    PetscReal g = Inlet->gammaInlet;
+    PetscReal R = Inlet->RInlet;
+    PetscReal Pt = Inlet->tankPressure;
+    PetscReal Tt = Inlet->tankTemperature;
+    //The main constraint that NEEDS to be satisfied when choked is u_n = a
+
+    // Assuming the boundary density is the correct value, Isentropic relations should be able to relate the pressure and temperature
     PetscReal boundaryDensity = boundaryValues[uOff[Inlet->eulerId] + RHO];
-    PetscReal boundaryPressure = Inlet->tankPressure * pow(boundaryDensity/Inlet->tankDensity,Inlet->gammaInlet);
-    PetscReal boundaryTemperature = Inlet->tankTemperature * pow(boundaryDensity/Inlet->tankDensity,Inlet->gammaInlet-1);
-
-    // determine if mass flux is choked or not
-    PetscReal massFlux, vel, KE = 0;
-    if (boundaryPressure/Inlet->tankPressure <= 0.5238) //Fix later to actual value based on gamma....TODO
+    PetscReal boundaryPressure = pow(boundaryDensity,g)*pow(Pt,1-g)*pow(R*Tt,g);
+    PetscReal boundaryTemperature = boundaryPressure/boundaryDensity/R;
+    PetscReal massFlux;
+    if (boundaryPressure/Inlet->tankPressure <= 0.528) //Fix later to actual value based on gamma....TODO
     { //Flow is choked
-        massFlux = Inlet->tankPressure/sqrt(Inlet->tankTemperature)*sqrt(Inlet->gammaInlet/Inlet->RInlet) *
-                   pow((Inlet->gammaInlet+1)/2, -(Inlet->gammaInlet+1)/2/(Inlet->gammaInlet-1));
-    } else {
-        throw std::runtime_error("The Mass flux has become unchoked In the pressure tank inlet! Consider adding the unchocked part now");
+        massFlux = Pt/sqrt(Tt) * sqrt(g/R) * pow((g+1)/2, -(g+1)/2/(g-1));
+    } else {//Else mass flux depends on the current mach number, and we will assume the current density is still right and override the calculated mass flux
+        PetscReal term = pow( sqrt(Tt) / Pt * sqrt(R/g) * boundaryDensity * sqrt(g*R*boundaryTemperature),-2*(g-1)/(g+1) );
+        term = 2/(g-1)*(term-1);
+        massFlux = PetscMax(0,boundaryDensity*sqrt(g*R*boundaryTemperature)*sqrt(term)); // I hope this works
     }
-
-    // set boundary mass flux and KE
+    //Ensure the boundaryVelocity is okay, and calculate Kinetic Energy for setting total energy
+    PetscReal vel, KE = 0;
     for (PetscInt d = 0; d < dim; d++) {
         //The normal should be pointing outside of the domain
         //So the velocity should be -massflux \hat{n}_i
@@ -171,48 +188,6 @@ PetscErrorCode ablate::boundarySolver::lodi::PressureTankInlet::UpdateConservedV
     boundaryValues[uOff[Inlet->eulerId] + RHOE] = boundaryDensity*(KE + boundarySensibleEnthalpy) - boundaryPressure;
     PetscFunctionReturn(0);
 }
-
-////Function to ensure energy at inlet coincides with the isentropic values predicted from the current state of the tank
-//PetscErrorCode ablate::boundarySolver::lodi::PressureTankInlet::UpdateConservedVariables(PetscInt dim, const ablate::boundarySolver::BoundarySolver::BoundaryFVFaceGeom *fg, const PetscFVCellGeom *boundaryCell,
-//                                                                           const PetscInt *uOff, PetscScalar *boundaryValues, const PetscScalar *stencilValues, const PetscInt *aOff,
-//                                                                           PetscScalar *auxValues, const PetscScalar *stencilAuxValues, void *ctx) {
-//    PetscFunctionBeginUser;
-//    auto Inlet = (PressureTankInlet *)ctx;
-//    PetscReal boundaryTemperature = auxValues[aOff[0]];
-//    //Assuming Temperature is correct at the boundary, update values using the isentropic relations and choked/unchoked mass flux
-//    PetscReal boundaryCp, boundaryCv;
-//    Inlet->computeSpecificHeatConstantPressure.function(boundaryValues, boundaryTemperature, &boundaryCp, Inlet->computeSpecificHeatConstantPressure.context.get());
-//    Inlet->computeSpecificHeatConstantVolume.function(boundaryValues, boundaryTemperature, &boundaryCv, Inlet->computeSpecificHeatConstantVolume.context.get());
-//    PetscReal gamma = boundaryCp/boundaryCv;
-//    PetscReal R = boundaryCp*(gamma-1)/gamma;
-//    PetscReal tankDensity = Inlet->tankPressure/R/Inlet->tankTemperature;
-//    PetscReal boundaryDensity = tankDensity*pow(boundaryTemperature/Inlet->tankTemperature,1/(gamma-1));
-//    PetscReal boundaryPressure = boundaryDensity*R*boundaryTemperature;
-//
-//    // determine if mass flux is choked or not
-//    PetscReal massFlux, vel, KE = 0;
-//    if (boundaryPressure/Inlet->tankPressure <= 0.5238) //Fix later to actual value based on gamma....TODO
-//    { //Flow is choked
-//        massFlux = Inlet->tankPressure/sqrt(Inlet->tankTemperature)*sqrt(gamma/R) *
-//                   pow((gamma+1)/2, -(gamma+1)/2/(gamma-1));
-//    } else {
-//        throw std::runtime_error("The Mass flux has become unchoked In the pressure tank inlet! Consider adding the unchocked part now");
-//    }
-//    boundaryValues[uOff[Inlet->eulerID] + finiteVolume::CompressibleFlowFields::RHO] = boundaryDensity;
-//    // set boundary mass flux and KE
-//    for (PetscInt d = 0; d < dim; d++) {
-//        //The normal should be pointing outside of the domain
-//        //So the velocity should be -massflux \hat{n}_i
-//        vel = -massFlux * fg->normal[d];
-//        boundaryValues[uOff[Inlet->eulerId] + finiteVolume::CompressibleFlowFields::RHOU + d] = vel;
-//        KE += PetscSqr(vel/boundaryDensity);
-//    }
-//    // set total energy = h_valve + KE - P_valve/\rho_valve
-//    PetscReal boundarySensibleEnthalpy;
-//    Inlet->computeSensibleEnthalpyFunction.function(boundaryValues, boundaryTemperature, &boundarySensibleEnthalpy, Inlet->computeSensibleEnthalpyFunction.context.get());
-//    boundaryValues[uOff[Inlet->eulerId] + RHOE] = boundaryDensity*(KE + boundarySensibleEnthalpy) - boundaryPressure;
-//    PetscFunctionReturn(0);
-//}
 
 #include "registrar.hpp"
 REGISTER(ablate::boundarySolver::BoundaryProcess, ablate::boundarySolver::lodi::PressureTankInlet, "Enforces a stagnation enthalpy driven inlet",
