@@ -114,9 +114,6 @@ PetscErrorCode ablate::boundarySolver::lodi::MassFluxInlet::InletFunction(PetscI
 
     // Get scriptL
     std::vector<PetscReal> scriptL(inletBoundary->nEqs);
-    // Outgoing acoustic wave
-    scriptL[1 + dim] = lambda[1 + dim] * (dPdNorm - boundaryDensity * PetscSqr(pgsAlpha) * dVeldNorm * (velNormPrim - boundaryNormalVelocity - speedOfSoundPrim));
-
     //The Following comes from Simit's Massflux_NSCBC sideset, but i assume it's just what falls out from the constant
     //mass flux isothermal lodi BC w/ pgs scaling
     PetscReal gam,F;
@@ -125,11 +122,25 @@ PetscErrorCode ablate::boundarySolver::lodi::MassFluxInlet::InletFunction(PetscI
     F = F/(boundarySpeedOfSound*boundarySpeedOfSound/PetscSqr(pgsAlpha) +
            gam*boundaryNormalVelocity * (velNormPrim-boundaryNormalVelocity) );
     F = (1.+F)/(1.-F);
-    // Incoming acoustic wave
-    scriptL[0] = F*scriptL[1 + dim];
-    // Entropy wave
-    scriptL[1] = 0.5e+0 * (boundaryCp / boundaryCv - 1.e+0) * (scriptL[1 + dim] + scriptL[0]) -
-                 0.5 * (boundaryCp / boundaryCv + 1.e+0) * (scriptL[0] - scriptL[1 + dim]) * (velNormPrim - boundaryNormalVelocity) / speedOfSoundPrim;
+    // If it is not closed to being choked
+    if ((-boundaryNormalVelocity < boundarySpeedOfSound)){
+        // Outgoing acoustic wave
+        scriptL[1 + dim] = lambda[1 + dim] * (dPdNorm - boundaryDensity * PetscSqr(pgsAlpha) * dVeldNorm * (velNormPrim - boundaryNormalVelocity - speedOfSoundPrim));
+        // Incoming acoustic wave
+        scriptL[0] = F*scriptL[1 + dim];
+        // Entropy wave
+        scriptL[1] = 0.5e+0 * (boundaryCp / boundaryCv - 1.e+0) * (scriptL[1 + dim] + scriptL[0]) -
+                     0.5 * (boundaryCp / boundaryCv + 1.e+0) * (scriptL[0] - scriptL[1 + dim]) * (velNormPrim - boundaryNormalVelocity) / speedOfSoundPrim;
+    } else {
+                // Outgoing acoustic wave
+        scriptL[0] = lambda[0] * (dPdNorm + boundaryDensity * PetscSqr(pgsAlpha) * dVeldNorm * (velNormPrim - boundaryNormalVelocity - speedOfSoundPrim));
+        // Incoming acoustic wave
+        scriptL[1 + dim] = scriptL[0]/F;
+        // Entropy wave
+        scriptL[1] = 0.5e+0 * (boundaryCp / boundaryCv - 1.e+0) * (scriptL[1 + dim] + scriptL[0]) -
+                     0.5 * (boundaryCp / boundaryCv + 1.e+0) * (scriptL[0] - scriptL[1 + dim]) * (velNormPrim - boundaryNormalVelocity) / speedOfSoundPrim;
+    }
+
 
     // Tangential velocities
     for (int d = 1; d < dim; d++) {
