@@ -44,10 +44,10 @@ PetscErrorCode ablate::boundarySolver::particles::ArbitraryParticleEjector::comp
         for(auto i = 0; i < _dim; i ++)
             particleCoords[i] = -faceNorm[i]*particleEjector->offset + faceCoords[i];
         //Create a pointer for the fields data
-        PetscInt numParticles = particleEjector->numParticleFields;
-        PetscReal* randomFieldData = new PetscReal[numParticles];
-        for(auto i = 0; i < particleEjector->numParticleFields; i++)
-            randomFieldData[i] = particleEjector->limitingMathValue;
+//        PetscInt numParticles = particleEjector->numParticleFields;
+//        PetscReal* randomFieldData = new PetscReal[numParticles];
+//        for(auto i = 0; i < particleEjector->numParticleFields; i++)
+//            randomFieldData[i] = particleEjector->limitingMathValue;
         newParticlesVec.push_back(particleCoords);
     }
     PetscFunctionReturn(0);

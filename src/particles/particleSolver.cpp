@@ -396,21 +396,40 @@ void ablate::particles::ParticleSolver::CheckForNewParticles() {
     if (!NewParticles.empty()) {
         //Tell the dm we're changing the particle sizing so it can appropriately fix the solution vector in the ts
         dmChanged = true;
-        //March through each particle and add it to the DM
+        //Grab the total number of current particles so we know which particle we added
+        PetscInt NorigParticles;
+        DMSwarmGetLocalSize(swarmDm, &NorigParticles) >> utilities::PetscUtilities::checkError;
+
+        //Grab dimension, Perhaps I need it, Perhaps I don't (Check later)
         PetscInt dim;
         DMGetDimension(swarmDm, &dim) >> utilities::PetscUtilities::checkError;
+
+        //Add the new particles to the DM
         Particle part;
         int N_newParticles = NewParticles.size();
-        //Eventually Change to just adding NParticles and using the swarmAcessor to change their values
-        for(auto i =0; i < N_newParticles; i++) {
-            part = NewParticles.back();
-            DMSwarmSetPointCoordinates(swarmDm,1,part.Coords,PETSC_FALSE, ADD_VALUES);
-            //Next do something with fields
+        DMSwarmAddNPoints(swarmDm,N_newParticles);
 
+        //Grab swarm coordinate fields and set them
+        DMSwarmCellDM cellDm; // Swarm cell DM
+        PetscReal* coord;     // Swarm coordinates
+        PetscInt Nfc;
+        const char **coordFields;
+//        const char *cellid;
+        DMSwarmGetCellDMActive(swarmDm, &cellDm) >> utilities::PetscUtilities::checkError;
+        DMSwarmCellDMGetCoordinateFields(cellDm, &Nfc, &coordFields);
+        DMSwarmGetField(swarmDm, coordFields[0], nullptr, nullptr, (void**)&coord) >> utilities::PetscUtilities::checkError;
+
+        //Loop over new particles and set their field Values/ coordinate Points
+        for(auto N_np =0; N_np < N_newParticles; N_np++) {
+            part = NewParticles.back();
+            for(auto d = 0; d < dim; d++)
+                coord[(NorigParticles+N_np)*dim + d] = part.Coords[d];
             //Remove Particle from vector
             NewParticles.pop_back();
         }
-
+        //Restore the fields
+        DMSwarmRestoreField(swarmDm, coordFields[0], nullptr, nullptr, (void**)&coord) >> utilities::PetscUtilities::checkError;
+//        DMSwarmRestoreField(swarmDm, cellid, nullptr, nullptr, (void**)&swarm_index) >> utilities::PetscUtilities::checkError;
     }
 };
 

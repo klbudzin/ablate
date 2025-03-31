@@ -24,9 +24,9 @@
         {
             std::vector<std::shared_ptr<processes::BurningProcess>> temporary;
             temporary = ablate::utilities::VectorUtilities::Filter<processes::BurningProcess>(coupledProcesses);
-            if (temporary.size() != 1)
-                throw std::invalid_argument("The Burning Particle solver expects 1 and only 1 burning process in the processes");
-            burningModel = temporary.at(0);
+            if (!temporary.empty())  burningModel = temporary.at(0);
+            if (temporary.size() > 1)
+                throw std::invalid_argument("The Burning Particle solver expects only 1 burning process in the processes");
         }
     }
 
@@ -39,9 +39,6 @@
                           {}
 
     void ablate::particles::BurningParticleSolver::DecodeSolverAuxVariables(double dt) {
-    //Note I might want to move this to the burning model thus different models can overload this call, this would allow and easy access to use an anlaytical solution
-    //i.e. don't set any RHS call in the burning Model so nothing is done on the petsc side for that process (in this case drag would still be calculated over that time which is probably fine, but can also change that model!
-
     //Right now only variable needed to be decoded is the diameter
     // average diameter = [ (mass/Number_Particles_in_Parcel/density)*6/pi ]^1/3
 
@@ -58,14 +55,13 @@
         // We need the eulerian field to update the burning state of the particle
         accessors::EulerianAccessor eulerianAccessor(cachePointData, subDomain, swarmAccessor, timeFinal);
 
-        // Attach a UpdateAuxFields Method to coupledProcesses and Call that here, or at least attach it to burning Model and call that here
-        // to do an analytical time steppeds solution, should be able to have the macrostepper pass in startTime end Time here as well,
-        // can even have an analytical toggle
-        this->burningModel->UpdateAuxFields();
-
         //Allow the Burning Model to handel updating whether a particle is burning or not
-        if(burningModel)
-            burningModel->UpdateParticleBurning(eulerianAccessor, swarmAccessor);
+        if(burningModel) {
+            // can use this updateAuxFields call to do analytical time stepped solutions, should be able to have the macrostepper
+            // pass in startTime end Time here as well, can even have an analytical toggle
+            this->burningModel->UpdateAuxFields();
+            this->burningModel->UpdateParticleBurning(eulerianAccessor, swarmAccessor);
+        }
 
         //Now check the minimum diameter and mark particles to be removed that have burned fully
         const auto np = swarmAccessor.GetNumberParticles();

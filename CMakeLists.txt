@@ -25,6 +25,9 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     include(CTest)
 endif ()
 
+# Create the library for ablate
+add_library(ablateLibrary SHARED)
+
 # Load in the subdirectories for the ablate library
 add_subdirectory(src)
 

@@ -76,7 +76,8 @@ PetscErrorCode ablate::particles::CoupledParticleSolver::PreRHSFunction(TS ts, P
 
     // Scale each source term by the volume of the cell because the project is
     //   M_f u_f = M_p u_p and the M_f includes the volume of the cell
-    PetscCall(VecPointwiseMult(localEulerianSourceVec, localEulerianSourceVec, localEulerianVolumeFactor));
+//     Usually we are Already putting in a total source, and Not a source per unit volume, so the below is unneeded
+//    PetscCall(VecPointwiseMult(localEulerianSourceVec, localEulerianSourceVec, localEulerianVolumeFactor));
     PetscFunctionReturn(PETSC_SUCCESS);
 }
 

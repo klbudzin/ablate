@@ -7,7 +7,8 @@ ablate::particles::processes::burningModel::NoEvaporationConstantBurn::NoEvapora
        PetscReal extinguishmentOxygenMassFraction, std::shared_ptr<eos::EOS> eosIn) :
        BurningProcess(std::move(eosIn), {}, massFractionsProducts, ignitionTemperature, nuOx, Lv, heatOfCombustion, extinguishmentOxygenMassFraction),
        burnRate(burnRate), convectionCoeff(convectionCoeff)
-       { }
+   {
+}
 
 
 void ablate::particles::processes::burningModel::NoEvaporationConstantBurn::ComputeRHS(PetscReal time, accessors::SwarmAccessor &swarmAccessor, accessors::RhsAccessor &rhsAccessor, accessors::EulerianAccessor &eulerianAccessor)
@@ -34,12 +35,13 @@ void ablate::particles::processes::burningModel::NoEvaporationConstantBurn::Comp
     PetscReal SAtot;
     //Calculate Each Particles RHS's
     for( auto np = 0; np < numParticles; np++) {
-        //Ideally this is a farField Value, but for this test case I'm not letting the particles burn until the particle itself reaches
-        // the ignition temperature, Particle may be burning now then when it was updated in the decode call, this will be called twice
+        //If the particle is burning we use the constant burn rate model
         if (partBurning(np))
-            massRHS(np) -= particlesPerParcel(np)*(partDensity(np)*PETSC_PI/4*partDiameterAvg(np)*burnRate);
-        //If it's not burning, we are just heating with our shitty convection model
-        else {
+            //d(D^2)/dt = 2D d(D)/dt = -K --> d(D)/dt = -K/2D
+            //d(M_(p,t))/dt = d(N_p \rho_p pi D^3/6)/dt = [N_p \rho_p pi/6] * d(D^3)/dt =["]3D^2 d(D)/dt
+            //d(M_(p,t))/dt = -N_p \rho_p pi/6 3/2 KD
+            massRHS(np) -= particlesPerParcel(np)*partDensity(np)*PETSC_PI/4*partDiameterAvg(np)*burnRate;
+        else { //If it's not burning, we are just heating with our shitty convection model
             SAtot = particlesPerParcel(np)*PETSC_PI*std::pow(partDiameterAvg(np),2);
             tempRHS(np) += convectionCoeff*(farFieldTemperature(np)-partTemperature(np))*SAtot/(parcelMass(np)*partCp(np));
             }
@@ -60,7 +62,7 @@ void ablate::particles::processes::burningModel::NoEvaporationConstantBurn::Comp
     auto parcelTempNew = swarmAccessorPostStep[ablate::particles::ParticleSolver::ParticleTemperature];
     auto parcelTempOld = swarmAccessorPreStep[ablate::particles::ParticleSolver::ParticleTemperature];
     auto parcelMassNew = swarmAccessorPostStep[ablate::particles::ParticleSolver::ParticleMass];
-    auto parcelMassOld = swarmAccessorPostStep[ablate::particles::ParticleSolver::ParticleMass];
+    auto parcelMassOld = swarmAccessorPreStep[ablate::particles::ParticleSolver::ParticleMass];
     //Determine if the particle was burning or not
     auto parcelBurning = swarmAccessorPostStep[ablate::particles::ParticleSolver::ParticleBurning];
 
@@ -73,7 +75,7 @@ void ablate::particles::processes::burningModel::NoEvaporationConstantBurn::Comp
     for (PetscInt p = 0; p < np; ++p) {
         if (parcelBurning(p)) {
             // Start by adding in the mass source terms
-            mdot = parcelMassOld(p)-parcelMassNew(p); //mass going into farfield
+            mdot = parcelMassOld(p)-parcelMassNew(p); //mass going into farfield0
             sourceEuler(p,ablate::finiteVolume::CompressibleFlowFields::RHO) += mdot;
             // now onto the species mass
             //Now to take care of species terms
@@ -81,11 +83,11 @@ void ablate::particles::processes::burningModel::NoEvaporationConstantBurn::Comp
                 sourceSpecies(p,ns) += mdot*(1+properties.nuOx)*properties.massFractionsProducts[ns]; //add the products
             sourceSpecies(p,oxygenOffset) -= properties.nuOx*mdot; //remove the oxygen
             //add in the burning energy
-            sourceEuler(p,1) -= mdot*properties.HC;
+            sourceEuler(p,1) += mdot*(properties.HC-properties.Lv);
         }
         else {
             //Since this is assumed no mass loss unless its burning, add in the particle heating/cooling coupling
-            sourceEuler(p,1) += parcelMassNew(p)*parcelCp(p)*(parcelTempNew(p)-parcelTempOld(p));
+            sourceEuler(p,1) -= parcelMassNew(p)*parcelCp(p)*(parcelTempNew(p)-parcelTempOld(p));
         }
     }
 }
