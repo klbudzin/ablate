@@ -41,6 +41,8 @@ PetscErrorCode ablate::particles::CoupledParticleSolver::PreRHSFunction(TS ts, P
     PetscFunctionBeginUser;
     PetscCall(RHSFunction::PreRHSFunction(ts, time, initialStage, locX));
 
+    Vec eulerianFullFieldSourceVec;
+    PetscCall(DMGetGlobalVector(subDomain->GetDM(), &eulerianFullFieldSourceVec));
     // march over every coupled field
     for (std::size_t f = 0; f < coupledFields.size(); ++f) {
         const auto& coupledField = coupledFields[f];
@@ -54,6 +56,7 @@ PetscErrorCode ablate::particles::CoupledParticleSolver::PreRHSFunction(TS ts, P
         // Create a global vector for this subDM to interpolate/push into from the particles
         Vec eulerianFieldSourceVec;
         PetscCall(DMGetGlobalVector(coupledFieldDM, &eulerianFieldSourceVec));
+//        PetscCall(DMGetLocalVector(coupledFieldDM, &eulerianFieldSourceVec));
 
         // project from the particle to the subDM vec
         // project the source terms to the global array
@@ -61,23 +64,22 @@ PetscErrorCode ablate::particles::CoupledParticleSolver::PreRHSFunction(TS ts, P
         Vec fields[1] = {eulerianFieldSourceVec};
         PetscCall(DMSwarmProjectFields(swarmDm, coupledFieldDM, 1, fieldnames, fields, SCATTER_FORWARD));
 
-        // Bring back to the global source vector
-        PetscCall(VecISCopy(localEulerianSourceVec, coupledFieldIS, SCATTER_FORWARD, eulerianFieldSourceVec));
+        //Push Field Projectsion back to total field vector
+        PetscCall(VecISCopy(eulerianFullFieldSourceVec, coupledFieldIS, SCATTER_FORWARD, eulerianFieldSourceVec));
+        //Global to local push to local Eulerian Source Vec
+        DMGlobalToLocal(subDomain->GetDM(), eulerianFullFieldSourceVec, INSERT_VALUES, localEulerianSourceVec) >> utilities::PetscUtilities::checkError;
 
         PetscCall(DMRestoreGlobalVector(coupledFieldDM, &eulerianFieldSourceVec));
+//        PetscCall(DMRestoreLocalVector(coupledFieldDM, &eulerianFieldSourceVec));
         PetscCall(DMDestroy(&coupledFieldDM));
         PetscCall(ISDestroy(&coupledFieldIS));
     }
-
+    PetscCall(DMRestoreGlobalVector(subDomain->GetDM(), &eulerianFullFieldSourceVec));
     // Scale the source vector by the current dt so that when integrated the total is the same
     PetscReal flowTimeStep;
     PetscCall(TSGetTimeStep(ts, &flowTimeStep));
     PetscCall(VecScale(localEulerianSourceVec, 1.0 / flowTimeStep));
 
-    // Scale each source term by the volume of the cell because the project is
-    //   M_f u_f = M_p u_p and the M_f includes the volume of the cell
-//     Usually we are Already putting in a total source, and Not a source per unit volume, so the below is unneeded
-//    PetscCall(VecPointwiseMult(localEulerianSourceVec, localEulerianSourceVec, localEulerianVolumeFactor));
     PetscFunctionReturn(PETSC_SUCCESS);
 }
 
@@ -90,7 +92,7 @@ PetscErrorCode ablate::particles::CoupledParticleSolver::PreRHSFunction(TS ts, P
  */
 PetscErrorCode ablate::particles::CoupledParticleSolver::ComputeRHSFunction(PetscReal time, Vec locX, Vec locF) {
     PetscFunctionBeginUser;
-    // Add back to the local F vector
+    // Add back to the local F vector (locF = locF+localEulerianSourceVector)
     PetscCall(VecAYPX(locF, 1.0, localEulerianSourceVec));
     PetscFunctionReturn(PETSC_SUCCESS);
 }
@@ -142,7 +144,7 @@ void ablate::particles::CoupledParticleSolver::Initialize() {
     DMCreateLocalVector(subDomain->GetDM(), &localEulerianSourceVec) >> utilities::PetscUtilities::checkError;
     VecZeroEntries(localEulerianSourceVec) >> utilities::PetscUtilities::checkError;
 
-    // duplicate the vec for localEulerianVolumeFactor
+    // duplicate the vec for localEulerianVolumeFactor (KLB THIS shouldn't be needed so maybe the below can be removed...)
     VecDuplicate(localEulerianSourceVec, &localEulerianVolumeFactor) >> utilities::PetscUtilities::checkError;
     VecSet(localEulerianVolumeFactor, 1.0);
 
@@ -183,12 +185,20 @@ void ablate::particles::CoupledParticleSolver::Initialize() {
 }
 
 void ablate::particles::CoupledParticleSolver::MacroStepParticles(TS macroTS, bool swarmMigrate) {
-    //Check if new particles were added during the eulariant timestepper
+    //Copy from Regular Particle solver Since calling redundant remove and check for new particle methods
+    //Does nothing since the vectors will be empty after one call
+
+    // Remove any Particles That need to be removed
+    RemoveParticles();
+    //Check if new particles were added during the eularian timestepper
     CheckForNewParticles();
     //if the dm has changed size (new particles, particles between ranks, particles deleted) reset the ts
     if (dmChanged) {
         TSReset(particleTs) >> utilities::PetscUtilities::checkError;
-        dmChanged = PETSC_FALSE;
+        SwarmMigrate();
+        dmChanged = PETSC_FALSE; // reset dmChanged
+        //Decode Aux variables because new particles will need to be updated
+        DecodeSolverAuxVariables();
     }
 
     // This function is called after the flow/main TS is advanced so all source terms should have already been added to the flow solver, so reset them to zero here.
@@ -219,16 +229,11 @@ void ablate::particles::CoupledParticleSolver::MacroStepParticles(TS macroTS, bo
     PetscReal endTime;
     TSGetTime(particleTs, &endTime) >> utilities::PetscUtilities::checkError;
 
-    //Decode any Aux Variables from the new solution before updating the eulerian source in case it uses any of the decoded
-    //Variables (Can eventually use this to bypass the timestepp if we ever want to in a process
-    DecodeSolverAuxVariables(endTime-startTime);
-
     // Update the source terms
     ComputeEulerianSource(startTime, endTime);
-
-    // Migrate any particles that have moved now that we have done the other calculations
     if (swarmMigrate) {
         SwarmMigrate();
+        CheckForRemovedParticles();
     }
 }
 

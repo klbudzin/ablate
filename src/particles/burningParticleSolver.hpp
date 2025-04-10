@@ -44,7 +44,6 @@ class BurningParticleSolver : public CoupledParticleSolver{
                           std::vector<std::shared_ptr<processes::Process>> processes, std::shared_ptr<initializers::Initializer> initializer,
                           std::vector<std::shared_ptr<mathFunctions::FieldFunction>> fieldInitialization, PetscReal minimumDiameterIn,
                           std::vector<std::shared_ptr<mathFunctions::FieldFunction>> exactSolutions = {}, const std::vector<std::string>& = {});
-
     /**
     * Check if the Particle Diameter is small enough not to just assume extinguihsed
     */
@@ -52,9 +51,10 @@ class BurningParticleSolver : public CoupledParticleSolver{
 
     void DecodeSolverAuxVariables(double dt) override;
 
+    void CheckForRemovedParticles() override;
+
     //! cleanup any petsc objects
     ~BurningParticleSolver() override = default;
-
 };
 
 }  // namespace ablate::particles

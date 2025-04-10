@@ -38,53 +38,77 @@
                                                   std::move(processes), std::move(initializer), std::move(fieldInitialization), minimumDiameterIn, std::move(exactSolutions), coupledFields)
                           {}
 
-    void ablate::particles::BurningParticleSolver::DecodeSolverAuxVariables(double dt) {
-    //Right now only variable needed to be decoded is the diameter
-    // average diameter = [ (mass/Number_Particles_in_Parcel/density)*6/pi ]^1/3
+    void ablate::particles::BurningParticleSolver::CheckForRemovedParticles() {
+        /** Get the swarm cell DM, cell Id and coordinate fields */
+//        DMSwarmCellDM cellDm;
+//        const char *cellid;
+//        PetscInt* swarm_index;
+//        DMSwarmGetCellDMActive(swarmDm, &cellDm) >> utilities::PetscUtilities::checkError;
+//        DMSwarmCellDMGetCellID(cellDm, &cellid) >> utilities::PetscUtilities::checkError;
+//        DMSwarmGetField(swarmDm, cellid, nullptr, nullptr, (void**)&swarm_index) >> utilities::PetscUtilities::checkError;
 
-
-    // determine if we should cachePointData
-    auto cachePointData = processes.size() != 1;
-    Vec packedSolutionVec;
-
-    // extract the vectors again
-    DMSwarmCreateGlobalVectorFromField(swarmDm, PackedSolution, &packedSolutionVec) >> utilities::PetscUtilities::checkError;
-    {
-        // use a mutable swarm accessor to access and change the right fields
-        accessors::MutableSwarmAccessor swarmAccessor(cachePointData, swarmDm, fieldsMap, packedSolutionVec);
-        // We need the eulerian field to update the burning state of the particle
-        accessors::EulerianAccessor eulerianAccessor(cachePointData, subDomain, swarmAccessor, timeFinal);
-
-        //Allow the Burning Model to handel updating whether a particle is burning or not
-        if(burningModel) {
-            // can use this updateAuxFields call to do analytical time stepped solutions, should be able to have the macrostepper
-            // pass in startTime end Time here as well, can even have an analytical toggle
-            this->burningModel->UpdateAuxFields();
-            this->burningModel->UpdateParticleBurning(eulerianAccessor, swarmAccessor);
+        // determine if we should cachePointData
+        auto cachePointData = processes.size() != 1;
+        Vec packedSolutionVec;
+        DMSwarmCreateGlobalVectorFromField(swarmDm, PackedSolution, &packedSolutionVec) >> utilities::PetscUtilities::checkError;
+        {
+             accessors::SwarmAccessor swarmAccessor(cachePointData, swarmDm, fieldsMap, packedSolutionVec);
+             auto diameter = swarmAccessor[ParticleDiameter];
+             const auto np = swarmAccessor.GetNumberParticles();
+              for(PetscInt p = 0; p < np; p++) {
+//                  if(!subDomain->InRegion(swarm_index[np]) || diameter(p) <= 0){
+                    if(diameter(p) <= 0){
+                      this->RemovingParticleIndices.push_back(p);
+                  }
+              }
         }
+        DMSwarmDestroyGlobalVectorFromField(swarmDm, PackedSolution, &packedSolutionVec) >> utilities::PetscUtilities::checkError;
+//        DMSwarmRestoreField(swarmDm, cellid, nullptr, nullptr, (void**)&swarm_index) >> utilities::PetscUtilities::checkError;
+    }
 
-        //Now check the minimum diameter and mark particles to be removed that have burned fully
-        const auto np = swarmAccessor.GetNumberParticles();
-        auto parcelMass = swarmAccessor[ParticleMass];
-        auto Npp = swarmAccessor[ParticleNPP];
-        auto density = swarmAccessor[ParticleDensity];
-        auto diameter = swarmAccessor[ParticleDiameter];
-        for(int p = 0; p < np; p++) {
-            //If the Mass went negative, force it and the diameter to 0
-            parcelMass(p) = PetscMax(0,parcelMass(p));
-            diameter(p) = std::pow(6/PETSC_PI*parcelMass(p)/Npp(p)/density(p),1./3.);
-            //Check if the diameter has gone lower than the minimum diameter, If it has Send the particle to 0 Mass
-            if ( CheckMinimumDiameterLimit(diameter(p)) ) {
-                parcelMass(p) = 0;
-                diameter(p) =0;
-                //Somehow Destroy the partice, Can just move this one to some coordinate outside the domain and let
-                //PetscHandle the removal internally!!! >.> will probably do this
+    void ablate::particles::BurningParticleSolver::DecodeSolverAuxVariables(double dt) {
+        // determine if we should cachePointData
+        auto cachePointData = processes.size() != 1;
+        Vec packedSolutionVec;
+
+        // extract the vectors again
+        DMSwarmCreateLocalVectorFromField(swarmDm, PackedSolution, &packedSolutionVec) >> utilities::PetscUtilities::checkError;
+        {
+            // use a mutable swarm accessor to access and change the right fields
+            accessors::MutableSwarmAccessor swarmAccessor(cachePointData, swarmDm, fieldsMap, packedSolutionVec);
+            // We need the eulerian field to update the burning state of the particle
+            accessors::EulerianAccessor eulerianAccessor(cachePointData, subDomain, swarmAccessor, timeFinal);
+
+            //Allow the Burning Model to handel updating whether a particle is burning or not
+            if(burningModel) {
+                // can use this updateAuxFields call to do analytical time stepped solutions, should be able to have the macrostepper
+                // pass in startTime end Time here as well, can even have an analytical toggle
+                this->burningModel->UpdateAuxFields();
+                this->burningModel->UpdateParticleBurning(eulerianAccessor, swarmAccessor);
+            }
+
+            //Now check the minimum diameter and mark particles to be removed that have burned fully
+            const auto np = swarmAccessor.GetNumberParticles();
+            auto parcelMass = swarmAccessor[ParticleMass];
+            auto Npp = swarmAccessor[ParticleNPP];
+            auto density = swarmAccessor[ParticleDensity];
+            auto diameter = swarmAccessor[ParticleDiameter];
+
+            for(PetscInt p = 0; p < np; p++) {
+                //If the Mass went negative, force it and the diameter to 0
+                parcelMass(p) = PetscMax(0,parcelMass(p));
+                diameter(p) = std::pow(6/PETSC_PI*parcelMass(p)/Npp(p)/density(p),1./3.);
+                //Check if the diameter has gone lower than the minimum diameter, If it has Send the particle to 0 Mass
+                if ( CheckMinimumDiameterLimit(diameter(p)) ) {
+                    parcelMass(p) = 0;
+                    diameter(p) = 0;
+                }
             }
         }
+        DMSwarmDestroyLocalVectorFromField(swarmDm, PackedSolution, &packedSolutionVec) >> utilities::PetscUtilities::checkError;
     }
-    DMSwarmDestroyGlobalVectorFromField(swarmDm, PackedSolution, &packedSolutionVec) >> utilities::PetscUtilities::checkError;
 
-}
+
 
 
 

@@ -12,11 +12,11 @@ template <class DataType>
 struct NewParticleData {
     //! the array for the solution values
     DataType* Coords = nullptr;
+    PetscInt NUpdateFields = 0;
     DataType* FieldValues = nullptr;
-//    std::vector<Field> ExtraFields;
-    /**
-     * empty default constructor
-     */
+    std::vector<Field> *UpdatingFields;
+
+    /* empty default constructor */
     NewParticleData() = default;
 
     /**
@@ -26,8 +26,8 @@ struct NewParticleData {
      * @param dataSizeIn
      * @param offset
      */
-    NewParticleData(DataType* Coords,DataType* FieldValues) :
-    Coords(Coords), FieldValues(FieldValues) {}// ,ExtraFields(std::move(FieldsSpecified)) {}
+    NewParticleData(DataType* Coords, PetscInt NUpdateFields, DataType* FieldValues, std::vector<Field> *Fields) :
+    Coords(Coords), NUpdateFields(NUpdateFields), FieldValues(FieldValues), UpdatingFields(Fields) {}
 
     NewParticleData(DataType* Coords): Coords(Coords) {}
 };
@@ -91,7 +91,11 @@ class ParticleSolver : public solver::Solver, public io::Serializable {
     //! store the exact solution if provided
     const std::vector<std::shared_ptr<mathFunctions::FieldFunction>> exactSolutions;
 
+    //! store new particle data that needs to be added to the swarm
     std::vector<Particle> NewParticles;
+
+    //! store particle indices that need to be removed from the swarm;
+    std::vector<PetscInt> RemovingParticleIndices;
 
    public:
     /**
@@ -153,6 +157,11 @@ class ParticleSolver : public solver::Solver, public io::Serializable {
      * @return the fields known to the particle solver
      */
      inline std::vector<Field> & getFields() { return fields; }
+
+      /**
+     * Get field information based upon field name
+     */
+     [[nodiscard]] const Field& GetField(const std::string& fieldName) const { return fieldsMap.at(fieldName); }
 
     /**
      * Helper function useful for tests
@@ -239,7 +248,14 @@ class ParticleSolver : public solver::Solver, public io::Serializable {
      * Decode any solver specific Auxillary Variables from solution vector (Burning Particles)
      */
     virtual void DecodeSolverAuxVariables(double dt);
-
+    /**
+     * checks if any particles hit some type of criterion to be removed (Burning Particles)
+     */
+    virtual void CheckForRemovedParticles() {};
+    /**
+     * Remove particles that have hit some type of criterion (Burning Particles)
+     */
+    void RemoveParticles();
     /**
      * Check if there are new particles to be added to dm and add them
      */
@@ -292,11 +308,6 @@ class ParticleSolver : public solver::Solver, public io::Serializable {
         const auto& field = GetField(fieldName);
         RestoreField(field, values);
     }
-
-    /**
-     * Get field information based upon field name
-     */
-    [[nodiscard]] const Field& GetField(const std::string& fieldName) const { return fieldsMap.at(fieldName); }
 
     /**
      * computes the particle rhs for the particle TS

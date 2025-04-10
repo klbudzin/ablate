@@ -5,6 +5,7 @@
 #include "particles/accessors/eulerianAccessor.hpp"
 #include "particles/accessors/rhsAccessor.hpp"
 #include "particles/accessors/swarmAccessor.hpp"
+#include "particles/accessors/mutableSwarmAccessor.hpp"
 #include "utilities/mpiUtilities.hpp"
 #include "utilities/vectorUtilities.hpp"
 
@@ -86,7 +87,6 @@ void ablate::particles::ParticleSolver::Setup() {
     // incase more than one solution field is provided, create a new field to hold them packed together
     {
         std::vector<std::string> solutionFieldComponentNames;
-
         // March over each solution field and compute the current offset
         for (const auto &field : fields) {
             if (field.location == domain::FieldLocation::SOL) {
@@ -392,15 +392,51 @@ void ablate::particles::ParticleSolver::SwarmMigrate() {
     dmChanged = dmChangedAll > 0;
 }
 
-void ablate::particles::ParticleSolver::CheckForNewParticles() {
-    if (!NewParticles.empty()) {
+// Particle solver methods to remove particles based on any solver specific criterion (Right now used by burning particles to remove
+// massless particles
+void ablate::particles::ParticleSolver::RemoveParticles() {
+    // If particles are added Removed locally here, mark that the local DM has changed so it can be communicated
+    PetscMPIInt dmChangedLocal = PETSC_FALSE;
+    if (!RemovingParticleIndices.empty()) {
         //Tell the dm we're changing the particle sizing so it can appropriately fix the solution vector in the ts
-        dmChanged = true;
+        dmChangedLocal = PETSC_TRUE;
+        //I hope everything is in order such that removing points at indices doesn't
+        //mess up what happens at other points
+        PetscInt Last = 1000000;
+        PetscInt currentIdx;
+        PetscInt NumPointsRemoving = RemovingParticleIndices.size();
+        for (auto np = 0; np < NumPointsRemoving; np++) {
+            currentIdx = RemovingParticleIndices.back();
+            if(currentIdx > Last)
+                throw std::runtime_error("Error: the removing particle indices vector was not in order and will probably cause"
+                                         "a problem in the way it is removed.");
+            Last = currentIdx;
+            //remove point and pop it off the vector
+            DMSwarmRemovePointAtIndex(swarmDm,currentIdx) >> utilities::PetscUtilities::checkError;
+            RemovingParticleIndices.pop_back();
+        }
+    }
+    //Check if any processes have added particles
+    MPI_Comm comm;
+    PetscObjectGetComm((PetscObject)particleTs, &comm) >> utilities::PetscUtilities::checkError;
+    PetscMPIInt dmChangedAll = PETSC_FALSE;
+    MPI_Allreduce(&dmChangedLocal, &dmChangedAll, 1, MPI_INT, MPI_MAX, comm) >> ablate::utilities::MpiUtilities::checkError;
+    //the dm might have changed for another reason before this so see if it has to be changed, i.e. if its still false
+    dmChanged = dmChanged ? PETSC_TRUE : dmChangedAll;
+}
+
+void ablate::particles::ParticleSolver::CheckForNewParticles() {
+    // If particles are added locally here, mark that the local DM has changed so it can be communicated
+    PetscMPIInt dmChangedLocal = PETSC_FALSE;
+    if (!NewParticles.empty()) {
+        //Inform our local process that the DM has added new particles
+        dmChangedLocal = PETSC_TRUE;
+
         //Grab the total number of current particles so we know which particle we added
         PetscInt NorigParticles;
         DMSwarmGetLocalSize(swarmDm, &NorigParticles) >> utilities::PetscUtilities::checkError;
 
-        //Grab dimension, Perhaps I need it, Perhaps I don't (Check later)
+        //Grab dimension
         PetscInt dim;
         DMGetDimension(swarmDm, &dim) >> utilities::PetscUtilities::checkError;
 
@@ -409,38 +445,77 @@ void ablate::particles::ParticleSolver::CheckForNewParticles() {
         int N_newParticles = NewParticles.size();
         DMSwarmAddNPoints(swarmDm,N_newParticles);
 
-        //Grab swarm coordinate fields and set them
+        //Use Petsc Routines to change particle location here
         DMSwarmCellDM cellDm; // Swarm cell DM
         PetscReal* coord;     // Swarm coordinates
         PetscInt Nfc;
         const char **coordFields;
-//        const char *cellid;
         DMSwarmGetCellDMActive(swarmDm, &cellDm) >> utilities::PetscUtilities::checkError;
         DMSwarmCellDMGetCoordinateFields(cellDm, &Nfc, &coordFields);
         DMSwarmGetField(swarmDm, coordFields[0], nullptr, nullptr, (void**)&coord) >> utilities::PetscUtilities::checkError;
-
-        //Loop over new particles and set their field Values/ coordinate Points
-        for(auto N_np =0; N_np < N_newParticles; N_np++) {
-            part = NewParticles.back();
-            for(auto d = 0; d < dim; d++)
+        for (auto N_np = 0; N_np < N_newParticles; N_np++) {
+            part = NewParticles.at(N_np);
+            for(auto d = 0; d < dim; d++) {
                 coord[(NorigParticles+N_np)*dim + d] = part.Coords[d];
-            //Remove Particle from vector
-            NewParticles.pop_back();
+            }
         }
         //Restore the fields
         DMSwarmRestoreField(swarmDm, coordFields[0], nullptr, nullptr, (void**)&coord) >> utilities::PetscUtilities::checkError;
-//        DMSwarmRestoreField(swarmDm, cellid, nullptr, nullptr, (void**)&swarm_index) >> utilities::PetscUtilities::checkError;
+
+        // Get a mutable swarm accessor to change the Field properties
+        // determine if we should cachePointData
+        auto cachePointData = processes.size() != 1;
+        // get the solution vector as a vector
+        Vec solutionVector;
+//        DMSwarmCreateGlobalVectorFromField(swarmDm, PackedSolution, &solutionVector) >> utilities::PetscUtilities::checkError; //where it breaks currently
+        DMSwarmCreateLocalVectorFromField(swarmDm, PackedSolution, &solutionVector) >> utilities::PetscUtilities::checkError;
+        //Need the accessor in it's own scope so it deletes before removing the solution vector
+        {
+            auto swarmAccessor = accessors::MutableSwarmAccessor(cachePointData,swarmDm, fieldsMap, solutionVector);
+            //Now we just need to update the fields for each particle
+            part = NewParticles.at(0);
+            auto fieldsToUpdate = part.UpdatingFields;
+            PetscInt fieldIdx = 0;
+            for(auto field: *fieldsToUpdate) {
+                auto fieldData = swarmAccessor[field.name];
+                for( auto N_np = 0; N_np < N_newParticles; N_np++) {
+                    part = NewParticles.at(N_np);
+                    //Change the data based on number of components
+                    if(field.numberComponents >1) throw std::runtime_error("Add in the support for multi component fields into particles");
+                    fieldData(NorigParticles+N_np) = part.FieldValues[fieldIdx];
+                }
+                fieldIdx +=1;
+            }
+            //Now Remove all the New Particles
+            NewParticles.clear();
+        }
+        // Get rid of the solution vector
+//        DMSwarmDestroyGlobalVectorFromField(GetParticleDM(), PackedSolution, &solutionVector) >> utilities::PetscUtilities::checkError;
+        DMSwarmDestroyLocalVectorFromField(GetParticleDM(), PackedSolution, &solutionVector) >> utilities::PetscUtilities::checkError;
     }
+    //Check if any processes have added particles
+    MPI_Comm comm;
+    PetscObjectGetComm((PetscObject)particleTs, &comm) >> utilities::PetscUtilities::checkError;
+    PetscMPIInt dmChangedAll = PETSC_FALSE;
+    MPI_Allreduce(&dmChangedLocal, &dmChangedAll, 1, MPI_INT, MPI_MAX, comm) >> ablate::utilities::MpiUtilities::checkError;
+    //the dm might have changed for another reason before this so see if it has to be changed, i.e. if its still false
+    dmChanged = dmChanged ? PETSC_TRUE : dmChangedAll;
+
 };
 
 //Post TimeRHS step
 void ablate::particles::ParticleSolver::MacroStepParticles(TS macroTS, bool swarmMigrate) {
-
+    // Remove any Particles That need to be removed (dmChanged altered if particles removed)
+    RemoveParticles();
+    // Add any particles that have been generated one way or another (dmChanged altered if particles added
     CheckForNewParticles();
-    // if the dm has changed size (new particles, particles moved between ranks, particles deleted) reset the ts
+    // if the dm has changed size (new particles, particles moved between ranks, particles deleted) reset the ts and migrate
     if (dmChanged) {
         TSReset(particleTs) >> utilities::PetscUtilities::checkError;
-        dmChanged = PETSC_FALSE;
+        SwarmMigrate();
+        dmChanged = PETSC_FALSE; // reset dmChanged
+        //Decode Aux variables because new particles will need to be updated
+        DecodeSolverAuxVariables();
     }
 
     // Update the coordinates in the solution vector
@@ -478,11 +553,14 @@ void ablate::particles::ParticleSolver::MacroStepParticles(TS macroTS, bool swar
     CoordinatesFromSolutionVector();
 
     //Decode any Aux Variables from the new solution
-    DecodeSolverAuxVariables();
+    DecodeSolverAuxVariables(dtUpdated);
 
     // Migrate any particles that have moved
     if (swarmMigrate) {
         SwarmMigrate();
+        //See if any particles should be removed at the start of the next particle update
+        //It stays in currently to ensure that their sources go to the eulerian fields correctly
+        CheckForRemovedParticles();
     }
 }
 
@@ -741,7 +819,9 @@ PetscErrorCode ablate::particles::ParticleSolver::Restore(PetscViewer viewer, Pe
 
     // load in the global particle size
     Vec particleCountVec;
-    PetscCall(VecCreateSeq(PETSC_COMM_SELF, 1, &particleCountVec));
+    PetscCall(VecCreateSeq(PETSC_COMM_SELF, 1, &particleCountVec)); //Old stuff needs fixing for parallelization
+//    PetscCall(VecCreateMPI(PetscObjectComm((PetscObject)GetParticleDM()), PETSC_DECIDE, 1, &particleCountVec));
+//    PetscCall(VecCreate(PETSC_COMM_WORLD, &particleCountVec));
     PetscCall(PetscObjectSetName((PetscObject)particleCountVec, "particleCount"));
     PetscCall(VecLoad(particleCountVec, viewer));
 
@@ -823,7 +903,7 @@ PetscErrorCode ablate::particles::ParticleSolver::Restore(PetscViewer viewer, Pe
     dmChanged = true;
     PetscFunctionReturn(0);
 }
-
+//Particle solver methods to decode auxillary variables from the new solution state
 void ablate::particles::ParticleSolver::DecodeSolverAuxVariables() {DecodeSolverAuxVariables(0.0);}
 void ablate::particles::ParticleSolver::DecodeSolverAuxVariables(double dt) {}
 

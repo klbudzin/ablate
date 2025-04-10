@@ -15,7 +15,6 @@ target_sources(ablateLibrary
         convectiveHeatTransfer.hpp
         coupledDrag.hpp
         burningProcess.hpp
-
         )
 
 add_subdirectory(drag)
