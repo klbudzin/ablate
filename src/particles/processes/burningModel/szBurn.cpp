@@ -2,48 +2,39 @@
 #include "utilities/constants.hpp"
 #include "particles/processes/burningModel/liquidFuels/waxFuel.hpp"
 #include "particles/processes/burningModel/dropletFlame/waxFlame.hpp"
-//#include "particles/processes/burningModel/liquidFuels/liquidFuel.hpp"
 #include <math.h>
-
 #include <utility>
-
-
-
 
 ablate::particles::processes::burningModel::SZBurn::SZBurn(PetscReal convectionCoeff,
        PetscReal ignitionTemperature, PetscReal burnRate, PetscReal nuOx, PetscReal Lv, PetscReal heatOfCombustion,
        const std::shared_ptr<ablate::mathFunctions::FieldFunction> &massFractionsProducts,
        PetscReal extinguishmentOxygenMassFraction, std::shared_ptr<eos::EOS> eosIn,std::string  fuelin) :
        BurningProcess(std::move(eosIn), {}, massFractionsProducts, ignitionTemperature, nuOx, Lv, heatOfCombustion, extinguishmentOxygenMassFraction),
-       K(burnRate), convectionCoeff(convectionCoeff),speciesNames{fuelin, "O2", "N2", "CO2", "H2O"},speciesOffSet(5, -1)
+       K(burnRate), convectionCoeff(convectionCoeff) {
 
-       {
-
-    //one can easily add more fuels here
     //TODO CHANGE THIS to C32H66 after done with debugging!!!!!!!!!
     if (fuelin == "CH4") {
-        fuelType="wax";
+        speciesNames.at(0) = fuelin;
+        fuelType = "wax";
         liquidFuel = std::make_shared<ablate::particles::processes::burningModel::waxFuel>();
         flame = std::make_shared<ablate::particles::processes::burningModel::waxFlame>();
     } else {
         throw std::invalid_argument("No liquid fuel, flamelet of the fuel with formula: " + fuelin);
     }
 
-    //initialize farfield
+    //initialize farfield (KLB Why isn't this just the actual far field values....) TODO:: FIX THIS
     farField.Temperature = 350.0;
     farField.Pressure = 101325.0;
     farField.Yox = 1.0;
 
-
+    //Determine location of
     auto speciesList = eos->GetSpeciesVariables();
-    numberSpecies = speciesList.size();
-    for (int idxsp = 0; idxsp < 5;idxsp++) {
+    for (size_t idxsp = 0; idxsp < speciesOffSet.size();idxsp++) {
         for (PetscInt idx = 0; idx < numberSpecies; idx++)
             if (speciesList.at(idx) == speciesNames[idxsp]) {
                 speciesOffSet[idxsp] = idx;
                 continue;
             }
-
     }
 
     //Check if all species are found in the mechanism;
@@ -60,16 +51,16 @@ ablate::particles::processes::burningModel::SZBurn::SZBurn(PetscReal convectionC
 
 void ablate::particles::processes::burningModel::SZBurn::ComputeRHS(PetscReal time, accessors::SwarmAccessor &swarmAccessor, accessors::RhsAccessor &rhsAccessor, accessors::EulerianAccessor &eulerianAccessor)
 {
-    auto partDiam2 = swarmAccessor[ablate::particles::ParticleSolver::ParticleDiameter];
-    auto partVel2 = swarmAccessor[ablate::particles::ParticleSolver::ParticleVelocity];
-    auto partDens2 = swarmAccessor[ablate::particles::ParticleSolver::ParticleDensity];
-    auto velocityRhs2 = rhsAccessor[ablate::particles::ParticleSolver::ParticleVelocity];
+//    auto partDiam2 = swarmAccessor[ablate::particles::ParticleSolver::ParticleDiameter];
+//    auto partVel2 = swarmAccessor[ablate::particles::ParticleSolver::ParticleVelocity];
+//    auto partDens2 = swarmAccessor[ablate::particles::ParticleSolver::ParticleDensity];
+//    auto velocityRhs2 = rhsAccessor[ablate::particles::ParticleSolver::ParticleVelocity];
 
     //Grab wanted fields from the eulerian field accessor
     //In this case we only need the Oxygen temperature and pressure fields
     auto farFieldTemperature = eulerianAccessor[ablate::finiteVolume::CompressibleFlowFields::TEMPERATURE_FIELD];
     auto farFieldPressure = eulerianAccessor[ablate::finiteVolume::CompressibleFlowFields::PRESSURE_FIELD];
-    auto farFieldSpecies = eulerianAccessor[ablate::finiteVolume::CompressibleFlowFields::YI_FIELD];
+//    auto farFieldSpecies = eulerianAccessor[ablate::finiteVolume::CompressibleFlowFields::YI_FIELD];
     //TODO get the actual O2 mass fractions;
     double YiO2=1;
     UpdateFarfield(farFieldTemperature.values[0],farFieldPressure.values[0],YiO2);
@@ -93,7 +84,7 @@ void ablate::particles::processes::burningModel::SZBurn::ComputeRHS(PetscReal ti
 
 
     auto numParticles = swarmAccessor.GetNumberParticles();
-    PetscReal SAtot;
+//    PetscReal SAtot;
     //Calculate Each Particles RHS's
     for( auto np = 0; np < numParticles; np++) {
         //Ideally this is a farField Value, but for this test case I'm not letting the particles burn until the particle itself reaches
@@ -188,15 +179,15 @@ void ablate::particles::processes::burningModel::SZBurn::UpdateFarfield(double T
 void ablate::particles::processes::burningModel::SZBurn::CalcBurnRate() {
 
     //Solve the droplet itteration
-    double root = BisectionMethodSolve([this](double Y) { return SolveSZBurn(Y); },0.999999,1E-10,1e-10,100);
+    BisectionMethodSolve([this](double Y) { return SolveSZBurn(Y); },0.999999,1E-10,1e-10,100);
 
     //Set burn rate
     K = result.K;
 }
 
-double ablate::particles::processes::burningModel::SZBurn::SolveSZBurn(double YAsOld) {
-    double MWs = 1 / (YAsOld / liquidFuel->fuelProperties.MW + (1 - YAsOld) / MWair);
-    double Pvap = YAsOld * farField.Pressure * MWs / liquidFuel->fuelProperties.MW;
+double ablate::particles::processes::burningModel::SZBurn::SolveSZBurn(double YsOld) {
+    double MWs = 1 / (YsOld / liquidFuel->fuelProperties.MW + (1 - YsOld) / MWair);
+    double Pvap = YsOld * farField.Pressure * MWs / liquidFuel->fuelProperties.MW;
 
     // Bound the vapor pressure
     Pvap = std::min(Pvap, farField.Pressure);
@@ -215,10 +206,10 @@ double ablate::particles::processes::burningModel::SZBurn::SolveSZBurn(double YA
 //    double rf_rs = 1 + LHS * gamma1 / gamma2;
 //    double mdot1 = 2 * PETSC_PI * Dp * gamma1 / (1. - 1. /(rf_rs+1E-20)) * log(MdotF_D_Mdot1 / (MdotF_D_Mdot1 - YAsOld));
 
-    double Bm = YAsOld/(1-YAsOld);
-    double mdot = 2.*PETSC_PI*Dp*(farField.kg/farField.Cpg)*log(1+Bm)/Bm;
-    double Ad = Dp*Dp*PETSC_PI;
-    double mFlux = mdot/Ad;
+    double Bm = YsOld/(1-YsOld);
+    double mdot_Fuel = 2.*PETSC_PI*Dp*(farField.kg/farField.Cpg)*log(1+Bm)/Bm;
+    double A_droplet = Dp*Dp*PETSC_PI;
+    double mFlux = mdot_Fuel/A_droplet;
 
     double ql = -liquidFuel->fuelProperties.kl * (Tsnew - Td) / (max(0.5*Dp, 1E-10));
     double qlLimiter = abs(dropletConstants.qlimfac * mFlux * liquidFuel->fuelProperties.Hvap) / abs(ql + 1E-10);
@@ -238,13 +229,13 @@ double ablate::particles::processes::burningModel::SZBurn::SolveSZBurn(double YA
 
     result.K = 8 * farField.kg / (farField.Cpg  * liquidFuel->fuelProperties.rhol) * log(1 + BoxT);
 
-    return YFs_new - YAsOld;
+    return YFs_new - YsOld;
 }
 
 void ablate::particles::processes::burningModel::SZBurn::CalcEvapRate() {
 
     //Solve the droplet itteration
-    double root = BisectionMethodSolve([this](double Y) { return SolveSZEvap(Y); },0.999999,1E-10,1e-10,100);
+    BisectionMethodSolve([this](double Y) { return SolveSZEvap(Y); },0.999999,1E-10,1e-10,100);
 
     //Set evaporation rate
     K = result.K;
@@ -288,18 +279,15 @@ double ablate::particles::processes::burningModel::SZBurn::SolveSZEvap(double YA
 }
 
 
-double ablate::particles::processes::burningModel::SZBurn::BisectionMethodSolve(std::function<double(double)> func, double a, double b, double tol, int maxIter) {
+void ablate::particles::processes::burningModel::SZBurn::BisectionMethodSolve(std::function<double(double)> func, double a, double b, double tol, int maxIter) {
     if (func(a) * func(b) >= 0) {
-        std::cerr << "Error: The function must have opposite signs at the endpoints a and b." << std::endl;
-        return NAN;
+        throw std::runtime_error("The Bisection Method must have opposite signs at the endpoints a and b.");
     }
-
     double c = a;
     for (int i = 0; i < maxIter; ++i) {
         c = (a + b) / 2; // Midpoint
         if (func(c) == 0.0 || abs(b - a) / 2 < tol) {
-            return c; // Root found or tolerance met
-//            continue;
+            return; // Root found or tolerance met
         }
         if (func(c) * func(a) < 0) {
             b = c; // Root is in left
@@ -307,9 +295,7 @@ double ablate::particles::processes::burningModel::SZBurn::BisectionMethodSolve(
             a = c; // Root is in right
         }
     }
-
     std::cerr << "Warning: Maximum number of iterations reached. Approximate root: " << c << std::endl;
-    return c;
 }
 
 

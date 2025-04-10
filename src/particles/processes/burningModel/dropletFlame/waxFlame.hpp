@@ -13,7 +13,7 @@ class waxFlame : public ablate::particles::processes::burningModel::CxHyOzFlame 
         y = 66;
         z = 0;
 
-        double YO2_inf = 0.23;
+//        double YO2_inf = 0.23;
 
         nuO2 = (x + y / 4.0 - z / 2.0) * MWO2 / MWFuel;
         nuCO2 = x * MWCO2 / MWFuel;
